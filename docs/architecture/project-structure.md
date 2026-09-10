@@ -49,47 +49,102 @@
 
 ## 应用源码层
 
-M1 实际落地结构：
+M1–M5 实际落地结构：
 
 ```text
 src/                            # React 前端
-├── App.tsx                     # 主界面：引擎守卫 / 表单 / 列表 / 计数
+├── App.tsx                     # 应用外壳：标题栏 + 侧栏 + 内容区 + 底栏安全提示
 ├── main.tsx                    # 入口，挂载 QueryClient 与 Toaster
-├── index.css                   # Tailwind 4 主题（含隧道状态色）
+├── index.css                   # Tailwind 4 主题（蓝色主色 + 隧道状态色）
 ├── components/
+│   ├── titlebar.tsx            # 自建标题栏（decorations:false，含拖拽与窗口控制）
+│   ├── sidebar.tsx             # 侧栏导航：映射 / 历史 / 设置，可收起为图标态、可拖拽
+│   ├── pages/
+│   │   ├── mappings-page.tsx   # 工作台：收藏 / 已开启 / 已关闭分区 + 筛选搜索 + 创建表单
+│   │   ├── history-page.tsx    # 档案：全部记录（含运行中），可恢复 / 删除
+│   │   └── settings-page.tsx   # 开机自启 + cloudflared 状态（随包 or 系统）
 │   ├── engine-guard.tsx        # cloudflared 缺失时的安装引导
 │   ├── create-tunnel-form.tsx  # 端口输入与创建
-│   ├── tunnel-card.tsx         # 单条隧道展示与操作
-│   └── ui/                     # shadcn 组件源码
+│   ├── port-badge.tsx          # 端口号专用渲染（纯数字，无 localhost: 与 : 前缀）
+│   ├── label-editor.tsx        # 就地编辑备注（每端口一条自由文本）
+│   ├── tag-editor.tsx          # 标签增删（人工分类，跨端口复用，用于筛选）
+│   ├── tunnel-card.tsx         # 单条展示：四行信息（端口/URL/备注/标签）+ 操作区
+│   └── ui/                     # shadcn 组件源码 + 自建 number-field / tooltip（替代原生控件与 title）
 ├── hooks/
-│   └── use-tunnels.ts          # TanStack Query 封装
+│   ├── use-tunnels.ts          # TanStack Query 封装 + 启动时自动重连
+│   └── use-autostart.ts        # 系统开机自启（官方 autostart 插件）
 └── lib/
     ├── tunnel-api.ts           # IPC 类型与调用，对齐 Rust 侧
+    ├── ui-store.ts             # 纯客户端 UI 偏好（侧栏收起态），zustand + localStorage
     └── utils.ts                # cn()
 
 src-tauri/
+├── build.rs                    # 校验 binaries/ 下的 cloudflared 并把路径喂给 include_bytes!
 ├── src/
 │   ├── main.rs                 # 二进制入口
-│   ├── lib.rs                  # Builder 接线 + 退出兜底清理
-│   ├── commands.rs             # 6 个 Tauri command
+│   ├── lib.rs                  # Builder 接线 + 引擎释放 + 状态注入 + 退出兜底清理
+│   ├── commands.rs             # 19 个 Tauri command，见 docs/api.md
+│   ├── store.rs                # state.json 原子读写（M4）
 │   └── tunnel/
 │       ├── provider.rs         # 引擎无关类型与错误（不变量 1）
-│       ├── cloudflared.rs      # spawn / 抓 stderr 取链接 / kill
-│       └── registry.rs         # 活跃隧道注册表与计数
+│       ├── cloudflared.rs      # 内嵌释放 / spawn / 抓 stderr 取链接 / kill
+│       ├── site.rs             # 本机站点探测：标题与 favicon（不变量 9、10）
+│       └── registry.rs         # 注册表、计数、进程监视与落盘
 └── tests/
-    └── tunnel_e2e.rs           # 真实公网连通性集成测试
+    ├── tunnel_e2e.rs           # 真实公网连通性集成测试（需外网）
+    └── registry_lifecycle.rs   # 崩溃感知与持久化往返（不需外网）
 
 scripts/
+├── fetch-cloudflared.mjs       # 取穿透引擎二进制到 src-tauri/binaries/（构建前必跑）
 └── fetch-shadcn.mjs            # 从 registry 取 shadcn 组件源码
 ```
-
-> 持久化（`storage.rs`）属 M4，尚未实现；当前隧道列表仅存于内存，重启即清空。
 
 ### 关键边界
 
 - **provider 抽象**：`tunnel/provider.rs` 定义引擎无关的 trait，UI 层与 `commands.rs` 只依赖该抽象，不得直接引用 `cloudflared.rs` 的具体类型。
 - **计数唯一来源**：活跃映射数量由 `tunnel/registry.rs` 持有，前端只读展示，不在 UI 层维护第二份计数。
 - **进程清理**：所有 spawn 必经 `registry`，保证退出时可遍历清理（不变量 5）。
+- **持久化只存意图**：`store.rs` 只落盘端口、备注、自动重连开关与累计计数；
+  `publicUrl` / `status` / `id` 一律不落盘。Quick Tunnel 链接随进程退出即失效，
+  缓存下来只是死链，同时不变量 6 要求链接不留存。**「自动重连」重建隧道并拿新链接，不是恢复旧链接。**
+- **映射页与历史页的分工**：映射页是工作台，展示所有 `archived == false` 的条目——
+  **包括已断开的**，因为用户断开后往往要立刻重连，让它消失会导致「刚断开就找不到」。
+  只有主动「归档」才移出映射页。历史页是档案，展示**全部**记录（含运行中）。
+  归档 ≠ 删除：归档只改可见性，记录仍在历史页；`purge_archived` 才是真删除。
+  历史页刻意**不提供**「下次启动时自动映射」开关——那是映射面板的属性，
+  放在历史里会让人以为归档的记录也会被自动拉起。
+  从历史「恢复」走的是 `create_tunnel` 复用同 id 条目的路径，`insert` 会自动取消归档。
+- **进程监视**：`registry` 为每条隧道起一个 `wait()` 任务，进程非预期退出时把状态改为
+  `Failed`，避免 UI 上留下「运行中」的死链。用户主动 stop / remove 会先置 `expected_exit`
+  标记以区分崩溃；因监视任务持锁 `wait`，kill 路径改用登记时存下的 pid 发系统信号。
+- **映射页的分区规则**：收藏 → 已开启 → 已关闭，且**收藏优先于运行状态**——
+  收藏的条目即使已断开也留在收藏区。这是刻意的：否则一条收藏的映射会在开关时
+  在两个分区之间跳来跳去，用户找不到它。同理「归档已关闭」跳过收藏项。
+- **端口是主体单位**：一条映射就是「某个端口对外的一扇门」，端口号因此排在卡片最前
+  并用 `port-badge.tsx` 专门渲染，**只显示数字**（既无 `localhost:` 也无 `:`）——
+  本应用映射的永远是本机端口，这些前缀对每条都相同、不携带信息，胶囊样式本身已表明是端口。
+  备注同理属于端口而非某次创建，
+  用 `label-editor.tsx` 就地编辑，不必重建映射（`set_label` command）。
+- **卡片的四行结构**：`tunnel-card.tsx` 的信息区固定四行——
+  ① 状态点 + 端口 + 站点图标标题 + 状态徽章，② 公网 URL，③ 备注，④ 标签。
+  **URL 行未运行时也占位**（显示「未运行，无公网链接」），否则状态一变下方内容会上下跳。
+  操作区顺序（运行中）：断开 → 定时 → 收藏 → 自动映射 → 复制 → 浏览器打开；
+  左半是「对映射做什么」，右半是「拿链接做什么」，破坏性与收纳操作收在最右。
+  自动映射用 `Repeat` 图标而非 `Power`／时钟类——前者会和断开撞语义，后者会和定时关闭撞。
+- **备注与标签不是一回事**：备注是每端口一条的自由文本，标签是跨端口复用的人工分类。
+  标签走「随用随建」——没有独立标签表，`all_tags` 从现有条目现算，
+  最后一个端口移除某标签后它自然消失。筛选取并集，详见 [api.md](../api.md)。
+- **两套「状态」不要混**：Rust 侧的数据走 TanStack Query + `state.json`；
+  纯界面偏好（侧栏收起态）走 `lib/ui-store.ts` 的 zustand + localStorage。
+  界面偏好不该进 `state.json`——它既不需要 Rust 侧知道，也不该混进隧道配置。
+- **站点信息的存活期**：`site` 与 `publicUrl` 的处理刻意不同——链接不落盘（旧的是死链），
+  站点标题与图标**落盘**（旧的只是过时，仍能认出是哪个服务）。
+  启动时先用落盘值填上，再由 `spawn_site_refresh` 重新探测；不一致才覆盖，
+  探测失败保留旧值。改这里前先读不变量 10，别把两者当成同一类数据。
+- **引擎解析**：`cloudflared.rs` 用 `OnceLock<Option<PathBuf>>` 存释放出的路径，
+  `lib.rs` 在 setup 阶段调 `extract_embedded` 并 `set_sidecar` 写入；未设或释放失败时
+  `program()` 退回字符串 `"cloudflared"` 交给系统 PATH 解析（不变量 4 的回退路径）。
+  释放按体积比对决定是否跳过，避免每次启动都写 53 MB。
 
 新增源码目录后，应在本文件补充职责说明；如果子目录超过两个稳定模块，建议在该目录内新增 `README.md`。
 

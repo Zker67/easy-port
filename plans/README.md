@@ -44,4 +44,21 @@ plans/
 
 ## 计划列表
 
-暂无计划。项目启动后在此添加。
+| 计划 | 阶段 | 状态 |
+|---|---|---|
+| [2026-09-10-m4-m5](./2026-09-10-m4-m5/00-overview.md) | 总览 | `[done]` |
+| ├ [01-persistence](./2026-09-10-m4-m5/01-persistence.md) | M4 持久化 / 恢复 / 错误态 | `[done]` |
+| └ [02-release](./2026-09-10-m4-m5/02-release.md) | M5 打包与开源发布 | `[done]` |
+| [2026-09-10-ux-polish](./2026-09-10-ux-polish/00-overview.md) | 总览：不加功能的人性化打磨 | `[partial]` |
+| ├ [01-feedback-and-waiting](./2026-09-10-ux-polish/01-feedback-and-waiting.md) | 等待过程与操作反馈 | `[done]` |
+| ├ [02-copy-and-errors](./2026-09-10-ux-polish/02-copy-and-errors.md) | 文案、错误信息与空状态 | `[done]` |
+| ├ [03-window-and-shell](./2026-09-10-ux-polish/03-window-and-shell.md) | 窗口、键盘与外壳细节 | `[partial]` |
+| └ [09-improvements](./2026-09-10-ux-polish/09-improvements.md) | 超出范围的观察记录 | `[planned]` |
+| [2026-09-10-shell-and-bundling](./2026-09-10-shell-and-bundling/00-overview.md) | 总览：外壳重构与引擎内嵌 | `[done]` |
+| ├ [01-mapping-page](./2026-09-10-shell-and-bundling/01-mapping-page.md) | 可点链接、分区筛选、站点识别 | `[done]` |
+| ├ [02-embed-engine](./2026-09-10-shell-and-bundling/02-embed-engine.md) | cloudflared 内嵌进主程序 | `[done]` |
+| ├ [03-site-persistence](./2026-09-10-shell-and-bundling/03-site-persistence.md) | 站点信息落盘 + 启动校验 | `[done]` |
+| └ [04-labels-and-tags](./2026-09-10-shell-and-bundling/04-labels-and-tags.md) | 端口成为持久单位：备注 + 标签筛选 | `[done]` |
+
+M1–M3（工程初始化、单条隧道、多隧道并发与计数）在建立本目录前完成，
+其稳定事实直接记录于 [docs/architecture/project-structure.md](../docs/architecture/project-structure.md)，无对应计划文档。

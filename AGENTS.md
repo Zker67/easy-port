@@ -15,9 +15,21 @@ Easy Port 是一个 Tauri 2 桌面应用，把本机任意端口映射到一条�
 1. **穿透引擎抽象**：`cloudflared` 是当前唯一实现，但必须置于 provider 抽象层之后，为后续接入 frp / ngrok 预留位置，不允许把 cloudflared 特有逻辑散落到 UI 层。
 2. **不引入 Express**：进程管理属于 Rust 侧职责，不额外拉起 Node 进程。
 3. **不引入数据库**：持久化仅隧道配置与计数，使用本地 JSON 文件；不引入 SQLite / Drizzle。
-4. **不打包 cloudflared 二进制**：运行时检测 + 界面引导安装，保持安装体积轻量。
+4. **cloudflared 内嵌进主程序**（2026-09-10 经用户明确要求，两次取代先前决策：先由「不打包」改为 sidecar，再改为内嵌）：
+   通过 `include_bytes!`（cargo feature `embed-cloudflared`，默认开启）编进 `easy-port.exe`，
+   主程序因此由 6 MB 增至约 60 MB，首次运行时释放到 app data 的 `engine/` 目录再 spawn。
+   目的是**单文件即可运行**——免安装版拷走一个 exe 就能用，不依赖同级目录的任何文件。
+   **回退路径不可删**：开发期（`tauri dev`）与关掉 feature 的构建都必须能用 PATH 上的 cloudflared。
+   二进制不入库（见 `.gitignore`），构建前用 `node scripts/fetch-cloudflared.mjs` 获取。
 5. **进程不可泄漏**：任何创建子进程的路径都必须有对应的清理路径，包括应用崩溃与强制退出场景。
 6. **链接即敏感信息**：Quick Tunnel 链接是公开可访问的，日志、错误信息、截图和文档中不得留存真实隧道 URL。
+7. **不使用原生控件**：步长切换器（`<input type="number">` 的原生箭头）、下拉菜单（`<select>`）与悬停提示（`title` 属性）一律用自建组件——`ui/number-field.tsx`、`ui/select.tsx` 与 `ui/tooltip.tsx`。原生控件由浏览器绘制，不受主题 token 控制、深浅色下观感不一致、命中区域过小，与桌面应用的一致性要求冲突。
+   **`title` 属性不得再出现在 `src/` 的任何 JSX 里**，统一用 `<Hint label="…">` 包裹。
+   `Hint` 不替代 `aria-label`：tooltip 只在悬停/聚焦时出现，朗读器与触屏用户依赖的仍是 `aria-label`，两者都要写。
+   包 `disabled` 的按钮时需外套一层 `<span>`——disabled 元素收不到指针事件，否则「为什么点不了」这条最该解释的提示反而不显示。
+8. **自建标题栏**：窗口设 `decorations: false`，标题栏由 `components/titlebar.tsx` 绘制。改动它时必须同时保证：拖拽区域（`data-tauri-drag-region`）足够大、三个窗口控制按钮对应的 `core:window:allow-*` 权限齐全、最大化状态跟随 `onResized` 更新。缺权限时按钮会静默失效。
+9. **站点探测只走本机回环**：`tunnel/site.rs` 抓标题与图标时只请求 `http://127.0.0.1:<port>`，**不得改成请求公网隧道 URL**。走公网会把流量绕经 Cloudflare、暴露链接到额外的日志面，且目标不是网页时毫无意义。探测失败一律返回 `None`，不阻断建立隧道。
+10. **站点信息落盘但每次启动校验**（2026-09-10 经用户要求，取代原「site 不落盘」决策）：`site` 存入 `state.json` 使列表启动即有名字可认；启动后 `spawn_site_refresh` 重新探测，**不一致才覆盖**，**探测失败保留旧值**。不要因为 `publicUrl` 不落盘就把 `site` 一并当成运行态清掉——旧链接是死链（有害），旧标题只是过时（仍可辨认）。
 
 ## 技术栈
 
