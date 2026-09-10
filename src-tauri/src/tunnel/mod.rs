@@ -6,3 +6,4 @@
 pub mod cloudflared;
 pub mod provider;
 pub mod registry;
+pub mod site;
