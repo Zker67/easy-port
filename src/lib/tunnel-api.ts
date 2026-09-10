@@ -1,39 +1,11 @@
 import { invoke } from "@tauri-apps/api/core";
 
-/** 与 Rust 侧 tunnel::provider::TunnelStatus 对应 */
-export type TunnelStatus =
-  | { kind: "starting" }
-  | { kind: "running" }
-  | { kind: "stopped" }
-  | { kind: "failed"; message: string };
+// 类型定义在 tunnel-types.ts，与 Web 控制台共用一份，避免字段漂移。
+// 这里原样转出，调用方 import 路径不变。
+export type { SiteInfo, Tunnel, TunnelStatus } from "./tunnel-types";
+export { isActive } from "./tunnel-types";
 
-/** 与 Rust 侧 tunnel::provider::Tunnel 对应 */
-export interface Tunnel {
-  id: string;
-  port: number;
-  /** 备注：每个端口一条的自由文本，说明这个端口是干什么的 */
-  label: string | null;
-  publicUrl: string | null;
-  status: TunnelStatus;
-  createdAt: string;
-  /** 定时关闭的到期时刻（RFC 3339）；未设定为 null。纯运行态，不跨重启 */
-  expiresAt: string | null;
-  /** 已归档：从「映射」页隐藏，但仍保留在「历史」页 */
-  archived: boolean;
-  /** 已收藏：在「映射」页置顶成独立分区 */
-  favorite: boolean;
-  /** 本机服务的站点信息，异步探测所得；非网页或探测失败为 null */
-  site: SiteInfo | null;
-  /** 人工分类标签，可多个、跨端口复用，用于筛选。与 label（备注）是两种东西 */
-  tags: string[];
-}
-
-/** 与 Rust 侧 tunnel::provider::SiteInfo 对应 */
-export interface SiteInfo {
-  title: string | null;
-  /** favicon 的 data URI */
-  icon: string | null;
-}
+import type { Tunnel } from "./tunnel-types";
 
 /** 与 Rust 侧 tunnel::registry::TunnelCounts 对应 */
 export interface TunnelCounts {
@@ -48,7 +20,7 @@ export interface EngineStatus {
   engine: string;
   /** 可执行文件路径，未找到时为 null */
   path: string | null;
-  /** 是否随应用打包。见 AGENTS.md 不变量 4：恒为 false */
+  /** true = 用的是内嵌释放出的副本；false = 回退到系统 PATH（不变量 4）*/
   bundled: boolean;
 }
 
@@ -120,6 +92,53 @@ export const tunnelApi = {
   counts: () => invoke<TunnelCounts>("tunnel_counts"),
 };
 
-export function isActive(status: TunnelStatus): boolean {
-  return status.kind === "running" || status.kind === "starting";
+/** 与 Rust 侧 web::console::WebStatus 对应 */
+export type WebStatus =
+  | { kind: "stopped" }
+  | { kind: "starting" }
+  | { kind: "running" }
+  | { kind: "failed"; message: string };
+
+/**
+ * 与 Rust 侧 web::console::WebConsoleView 对应。
+ *
+ * 刻意不含 token 哈希——前端没有任何理由拿到它。
+ */
+export interface WebConsoleView {
+  port: number;
+  label: string | null;
+  /** 是否已设置 token；开启控制台前必须为 true */
+  hasToken: boolean;
+  status: WebStatus;
+  /** 公网链接，仅运行时非空。不落盘 */
+  publicUrl: string | null;
+  autoStart: boolean;
 }
+
+/**
+ * Web 远程控制台。
+ *
+ * 这些命令**只在桌面端可用**：Web 端不能改控制台自身的配置，
+ * 否则攻破一次即可把 token 改成攻击者的，永久驻留。
+ */
+export const webApi = {
+  status: () => invoke<WebConsoleView>("web_console_status"),
+
+  setPort: (port: number) => invoke<void>("set_web_console_port", { port }),
+
+  setLabel: (label: string | null) =>
+    invoke<void>("set_web_console_label", { label }),
+
+  /** 生成新 token；**明文只在此刻返回一次**，之后只能重新生成 */
+  regenerateToken: () => invoke<string>("regenerate_web_token"),
+
+  setAutoStart: (enabled: boolean) =>
+    invoke<void>("set_web_auto_start", { enabled }),
+
+  start: () => invoke<WebConsoleView>("start_web_console"),
+
+  stop: () => invoke<void>("stop_web_console"),
+
+  /** 启动时按 auto_start 决定是否自动开启，返回是否真的开启了 */
+  restore: () => invoke<boolean>("restore_web_console"),
+};

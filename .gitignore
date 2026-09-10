@@ -2,6 +2,8 @@
 node_modules/
 dist/
 dist-ssr/
+# Web 控制台构建产物，由 npm run build:web 生成后编进 Rust 二进制
+dist-web/
 *.local
 npm-debug.log*
 yarn-debug.log*

@@ -1,0 +1,260 @@
+/*
+ * Web 控制台样式。
+ *
+ * 刻意手写而不引 Tailwind 或组件库：两个视图撑不起一套设计系统，
+ * 且手机端首要指标是加载速度。配色取自桌面端主题，保持观感一致。
+ */
+
+:root {
+  --bg: oklch(0.99 0 0);
+  --card: oklch(1 0 0);
+  --fg: oklch(0.21 0.01 265);
+  --muted: oklch(0.55 0.02 265);
+  --border: oklch(0.92 0.01 265);
+  --primary: oklch(0.54 0.21 255);
+  --primary-fg: oklch(0.99 0 0);
+  --danger: oklch(0.58 0.22 25);
+  --online: oklch(0.7 0.17 145);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: oklch(0.16 0.01 265);
+    --card: oklch(0.2 0.01 265);
+    --fg: oklch(0.96 0 0);
+    --muted: oklch(0.66 0.02 265);
+    --border: oklch(0.29 0.01 265);
+    --primary: oklch(0.68 0.17 255);
+    --primary-fg: oklch(0.16 0.01 265);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family:
+    system-ui,
+    -apple-system,
+    "Segoe UI",
+    "Noto Sans SC",
+    sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  /* 手机上安全区域，避免内容被刘海或底部横条盖住 */
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+.wrap {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+/* ---------- 登录 ---------- */
+
+.login {
+  min-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 14px;
+}
+
+.login h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.login p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.field {
+  display: flex;
+  gap: 8px;
+}
+
+input[type="password"],
+input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  padding: 12px;
+  font-size: 16px; /* 小于 16px 时 iOS 会自动放大页面 */
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+input:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+
+button {
+  /* 点击目标不小于 44px，手机上才好按 */
+  min-height: 44px;
+  padding: 0 16px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--fg);
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+button.primary {
+  color: var(--primary-fg);
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+button.danger {
+  color: var(--danger);
+  border-color: color-mix(in oklch, var(--danger) 40%, transparent);
+}
+
+.error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* ---------- 列表 ---------- */
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.bar h1 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.item {
+  padding: 12px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.port {
+  padding: 2px 8px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.port.on {
+  color: var(--primary);
+  background: color-mix(in oklch, var(--primary) 10%, transparent);
+  border-color: color-mix(in oklch, var(--primary) 30%, transparent);
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+}
+
+.dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+
+.dot.on {
+  background: var(--online);
+}
+
+.url {
+  display: block;
+  margin-top: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.tag {
+  padding: 1px 6px;
+  font-size: 11px;
+  color: var(--muted);
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.actions button {
+  flex: 1;
+}
+
+.empty {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+}
+
+.note {
+  margin-top: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  text-align: center;
+}
