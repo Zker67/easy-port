@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
-import { tunnelApi } from "@/lib/tunnel-api";
+import { tunnelApi, webApi } from "@/lib/tunnel-api";
 
 const KEYS = {
   engine: ["engine"] as const,
@@ -305,6 +305,11 @@ export function useRestoreOnLaunch(enabled: boolean) {
       // 启动时若读配置有告警（文件损坏等），先提示一次。
       const warning = await tunnelApi.startupWarning();
       if (warning) toast.warning(warning);
+
+      // Web 控制台的自动开启与隧道重建互不依赖，先发起它
+      void webApi.restore().then((started) => {
+        if (started) toast.success("Web 远程控制台已自动开启");
+      });
 
       const outcomes = await tunnelApi.restore();
       if (outcomes.length === 0) return;

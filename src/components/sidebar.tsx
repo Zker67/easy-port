@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   History,
+  MonitorSmartphone,
   PanelLeftClose,
   PanelLeftOpen,
   Settings,
@@ -16,7 +17,7 @@ import {
 } from "@/lib/ui-store";
 import { cn } from "@/lib/utils";
 
-export type Page = "mappings" | "history" | "settings";
+export type Page = "mappings" | "history" | "web" | "settings";
 
 const ITEMS: {
   id: Page;
@@ -35,6 +36,12 @@ const ITEMS: {
     label: "历史",
     icon: History,
     hint: "全部记录（含已归档），可恢复到映射页或彻底删除",
+  },
+  {
+    id: "web",
+    label: "Web",
+    icon: MonitorSmartphone,
+    hint: "远程控制台：在手机等其他设备上查看与开关映射",
   },
   {
     id: "settings",

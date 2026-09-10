@@ -5,6 +5,7 @@ import { EngineGuard } from "@/components/engine-guard";
 import { HistoryPage } from "@/components/pages/history-page";
 import { MappingsPage } from "@/components/pages/mappings-page";
 import { SettingsPage } from "@/components/pages/settings-page";
+import { WebPage } from "@/components/pages/web-page";
 import { Sidebar, type Page } from "@/components/sidebar";
 import { Titlebar } from "@/components/titlebar";
 import { Badge } from "@/components/ui/badge";
@@ -69,6 +70,10 @@ export default function App() {
           totalCreated={counts.data?.totalCreated ?? 0}
         />
       );
+    }
+
+    if (page === "web") {
+      return <WebPage />;
     }
 
     return <MappingsPage tunnels={items} autoStartFlags={flags} />;
