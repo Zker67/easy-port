@@ -16,7 +16,9 @@
         "width": 960,
         "height": 680,
         "minWidth": 720,
-        "minHeight": 520
+        "minHeight": 520,
+        "center": true,
+        "decorations": false
       }
     ],
     "security": {
@@ -25,7 +27,13 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
+    "targets": ["nsis"],
+    "publisher": "zker67",
+    "copyright": "Copyright © 2026 zker67. MIT License.",
+    "category": "DeveloperTool",
+    "homepage": "https://github.com/Zker67/easy-port",
+    "shortDescription": "本机端口一键映射到公网 HTTPS 链接",
+    "longDescription": "把本机任意端口映射到一条公网 HTTPS 链接供其他机器访问，支持随时断开与自动重连。穿透能力由外部 cloudflared 提供，不随应用打包。",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

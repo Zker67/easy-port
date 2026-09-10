@@ -15,6 +15,12 @@ edition = "2021"
 name = "easy_port_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+# 把 cloudflared 直接编进 exe（一体化单文件形态，体积 +53 MB）。
+# 关闭时回退为 sidecar / PATH 查找，开发期用这个更快。
+default = ["embed-cloudflared"]
+embed-cloudflared = []
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
@@ -31,6 +37,16 @@ regex = "1"
 thiserror = "2"
 uuid = { version = "1", features = ["v4", "serde"] }
 chrono = { version = "0.4", features = ["serde"] }
+# 探测本机服务的网页标题与 favicon（只请求 127.0.0.1，不走公网）
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
+base64 = "0.22"
+
+# 按 pid 终止子进程：监视任务持锁 wait 时无法走 Child::kill，退回系统调用
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-autostart = "2"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }

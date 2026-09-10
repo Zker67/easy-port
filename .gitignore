@@ -20,3 +20,12 @@ Thumbs.db
 
 # 本地运行态数据
 *.log
+
+# 图片生成工具的本机产物与项目级 Skill 部署，不入库
+.claude/
+.pro-image-project.json
+_work/
+outputs/
+
+# 随包分发的 cloudflared（约 53 MB），由 scripts/fetch-cloudflared.mjs 下载，不入库
+src-tauri/binaries/
