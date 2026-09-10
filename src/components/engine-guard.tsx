@@ -18,7 +18,7 @@ interface Props {
 /** cloudflared 不可用时的引导页。不静默失败，给出可操作的下一步。 */
 export function EngineGuard({ onRetry, isRetrying }: Props) {
   return (
-    <div className="flex min-h-screen items-center justify-center p-6">
+    <div className="flex items-center justify-center py-10">
       <Card className="w-full max-w-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -40,9 +40,14 @@ export function EngineGuard({ onRetry, isRetrying }: Props) {
               <Button
                 variant="outline"
                 size="icon-sm"
-                onClick={() => {
-                  void writeText(INSTALL_CMD);
-                  toast.success("命令已复制");
+                onClick={async () => {
+                  // 不谎报成功：命令文本本身可手选，失败时指向它。
+                  try {
+                    await writeText(INSTALL_CMD);
+                    toast.success("命令已复制");
+                  } catch {
+                    toast.error("复制失败，可手动选中左侧命令复制");
+                  }
                 }}
                 aria-label="复制安装命令"
               >
@@ -60,7 +65,16 @@ export function EngineGuard({ onRetry, isRetrying }: Props) {
               <RefreshCw className={isRetrying ? "animate-spin" : ""} />
               重新检测
             </Button>
-            <Button variant="outline" onClick={() => void openUrl(DOCS_URL)}>
+            <Button
+              variant="outline"
+              onClick={async () => {
+                try {
+                  await openUrl(DOCS_URL);
+                } catch {
+                  toast.error("打开浏览器失败，请手动访问 Cloudflare 下载页");
+                }
+              }}
+            >
               <ExternalLink />
               其他安装方式
             </Button>
