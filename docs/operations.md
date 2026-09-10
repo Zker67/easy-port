@@ -9,6 +9,23 @@
 | Node.js + npm | 前端构建 | 否（开发期） |
 | Rust toolchain | Tauri 构建 | 否（开发期） |
 | `cloudflared` | 穿透引擎，运行时由应用 spawn | **是**，用 `include_bytes!` 内嵌进 `easy-port.exe` |
+| `dist-web/` | Web 远程控制台的前端产物 | **是**，用 `include_dir!` 内嵌 |
+
+### 构建前必须先产出 dist-web
+
+```bash
+npm run build:web    # 产出 dist-web/，约 11.6 KB gzip
+```
+
+`src-tauri/src/web/assets.rs` 里的 `include_dir!("$CARGO_MANIFEST_DIR/../dist-web")`
+在**编译期**读目录，缺了它 `cargo build` 直接失败——这不是运行时才报的错。
+
+`npm run build` 与 `npm run tauri build` 都已包含这一步；
+**只有单独跑 `cargo check` / `cargo test` 时需要先手动执行一次**。
+`dist-web/` 是产物，**不入库**（见 `.gitignore`）。
+
+Web 端刻意 alias `react` → `preact/compat`：控制台要在手机上过公网加载，
+桌面端那份 153 KB gzip 的包不合适，换 Preact 后降到 11.6 KB。
 
 ### 构建前必须先获取 cloudflared
 
@@ -64,6 +81,7 @@ npm run tauri dev
 |---|---|---|
 | 隧道配置与计数 | app data 目录下的 `state.json` | 由应用自动创建与维护，不入库；schema 见 [api.md](./api.md#持久化-schema) |
 | 释放出的穿透引擎 | app data 目录下的 `engine/cloudflared.exe` | 首次运行时从内嵌数据写出，可安全删除（下次启动会重新释放） |
+| Web 控制台配置 | `state.json` 的 `web` 段 | 端口、备注、自动开启开关与 **token 的 Argon2id 哈希**；明文 token 不落盘 |
 
 `state.json` 只存端口、备注、自动重连开关与历史累计计数，采用「先写 `.tmp` 再 rename」的原子写。
 **公网链接不落盘**：Quick Tunnel 域名随进程退出即失效，缓存无意义且违反不变量 6。
@@ -88,10 +106,16 @@ cargo check
 cargo test --lib                                    # 单元测试
 cargo test --test registry_lifecycle -- --nocapture # 进程生命周期与持久化
 cargo test --test tunnel_e2e -- --nocapture         # 真实公网连通性测试
+cargo test --test web_console -- --nocapture        # Web 控制台鉴权回归（不需外网）
 ```
 
 `registry_lifecycle` 用一个长睡的 `node` 子进程代替 cloudflared，验证崩溃感知、
 主动停止不误报、配置跨重启保留与链接不落盘，**不需要外网**。
+
+`web_console` 真起一个监听随机端口的 HTTP 服务，用真实请求验证：未登录 401、
+cookie 四属性齐全、限速与认证失败响应不可区分、换 token 踢旧会话、安全响应头、
+关闭后端口释放。**这些是安全措施的回归证据，删改前先读
+[plans/2026-09-10-web-console/02-security.md](../plans/2026-09-10-web-console/02-security.md)。**
 
 `tunnel_e2e` 会对真实 cloudflared 建立一条隧道并从公网回访本机，需要外网连通与本机 `node`；条件不满足时自动跳过而非失败。
 
@@ -143,8 +167,23 @@ npm run build && grep -c 'data-state=open' dist/assets/index-*.css
 侧栏拖拽把手的指示线最初就写成了 `after:`，编译产物里 `::after` 规则数为 0。
 **改用真实子元素**，不依赖伪元素。
 
-> **已知遗留**：`ui/select.tsx` 仍在用 `data-open:` / `data-closed:`，
-> 下拉面板的展开收起动画因此不生效（不影响功能，面板照常显示）。修的时候一并改成 `data-[state=…]`。
+## Web 远程控制台
+
+在「Web」页给应用自己开一个端口并映射出去，就能在手机等其他设备上开关本机的映射。
+
+- **必须先设置访问 token 才能开启**，没有 token 时 `start_web_console` 直接拒绝。
+- token 由 CSPRNG 生成（32 字节 → 43 字符 base64url），**明文只在生成时显示一次**，
+  之后只剩 Argon2id 哈希；忘了就重新生成。
+- 重新生成 token 会**立即作废所有已登录会话**，旧设备需重新输入。
+- 该端口不出现在「映射」页，也不计入顶栏活跃数量——它是应用自己的控制面，不是用户的服务。
+- Web 端只能**开关已有映射**，不能新建、删除、改配置，更不能改控制台自身。
+
+| 现象 | 排查方向 |
+|---|---|
+| 开启时报「无法监听本机 X 端口」 | 端口被占用，换一个（默认 17650） |
+| 手机上打不开 | 隧道是否还在（cloudflared 挂了会连带停掉服务）；链接是否是最新的——每次开启都是新域名 |
+| 反复输错 token 后正确 token 也进不去 | 触发了限速锁定（每来源 5 次失败锁 15 分钟），等待或重启应用 |
+| 换了 token 后手机被登出 | 预期行为，重新输入新 token |
 
 ## 部署
 

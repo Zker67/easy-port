@@ -32,11 +32,12 @@
 | 样式 | Tailwind CSS 4 + shadcn/ui | 组件与设计系统 |
 | 状态 | Zustand（客户端）+ TanStack Query（隧道状态轮询） | 客户端 UI 状态与 Rust 侧数据分离 |
 | 后端 | Tauri 2（Rust） | 子进程生命周期管理、stdout 解析、IPC |
+| Web 控制台 | axum（进程内）+ Preact | 手机端远程开关映射，独立打包为 11.6 KB gzip |
 | 穿透引擎 | cloudflared Quick Tunnel | 免服务器、免注册，自动分配 `*.trycloudflare.com` 域名 |
 | 数据存储 | 本地 JSON 文件（`tauri-plugin-fs` app data 目录） | 仅存隧道配置与计数，数据量小，不引入数据库 |
 | 自动化 | `tsc` 类型检查 + `oxlint` + `cargo check` | 详见 [docs/operations.md](./docs/operations.md) |
 
-> **不引入的依赖**：Express（Rust 侧直接管理进程，无需额外 Node 进程）、SQLite/Drizzle（持久化数据量极小，JSON 足够）。见 [AGENTS.md](./AGENTS.md) 的项目不变量。
+> **不引入的依赖**：独立后端进程（进程管理在 Rust 侧，不额外拉 Node；Web 控制台是进程内的内嵌 axum 服务）、SQLite/Drizzle（持久化数据量极小，JSON 足够）。见 [AGENTS.md](./AGENTS.md) 的项目不变量。
 
 ## 功能特性
 
@@ -54,12 +55,17 @@
 - **自动重连**：为常用端口开启开关，下次启动应用时自动重新建立映射。
 - **失效可见**：cloudflared 进程意外退出时条目立即转为失败态，不会挂着一条打不开的死链。
 - **定时关闭**：建立时可选 15 分钟 ~ 8 小时，到点自动断开；卡片上实时倒计时，随时可改期或取消。
-- **侧栏分区**：映射（工作台，含已断开的，便于一键重连）/ 历史（全部记录，可恢复）/ 设置。
+- **手机上也能开关**：Web 页给应用自己映射一条链接，输入访问 token 后即可在手机等设备上开关本机映射；该端口不占用映射列表，也不计入活跃数量。
+- **侧栏分区**：映射（工作台，含已断开的，便于一键重连）/ 历史（全部记录，可恢复）/ Web / 设置。
 - **归档而非删除**：断开的映射留在映射页，归档后才移入历史；历史里随时能恢复回来。
 - **开机自启**：可选让 Windows 登录后自动启动应用；与「下次启动时自动映射」叠加即可开机即映射。
 
 > **两个「自动」的区别**：设置页的**开机自启**决定「Windows 开机后是否拉起 Easy Port」；
 > 每条映射上的**下次启动时自动映射**决定「Easy Port 启动后是否重建该映射」。两者都开才是开机即映射。
+
+> **关于 Web 控制台的安全**：公网链接**不是密码**——它会出现在 Cloudflare 的边缘日志里，
+> 也常被随手截图分享。真正的凭据是访问 token：CSPRNG 生成、只存 Argon2id 哈希、
+> 明文仅在生成时显示一次。Web 端只能开关**已有**映射，不能新建、删除或修改控制台自身。
 
 > **关于链接**：cloudflared Quick Tunnel 的域名在进程存活期间临时分配，进程退出即失效。
 > 因此「自动重连」重建的是**隧道**，每次都会得到一条**新链接**，旧链接无法恢复，也不会被存盘。
@@ -99,6 +105,10 @@ npm install
 
 # 获取穿透引擎二进制（不入库，构建前必跑一次）
 node scripts/fetch-cloudflared.mjs
+
+# 产出 Web 控制台前端（不入库；`npm run build` 已包含这一步，
+# 但直接跑 cargo 前需单独执行——缺了 dist-web/ 编译期就失败）
+npm run build:web
 
 # 启动开发环境
 npm run tauri dev
@@ -166,5 +176,6 @@ npm run tauri build
 | M5 | 打包与开源发布 | ✅ |
 | M6 | 界面外壳重构：自建标题栏 / 侧栏 / tooltip，引擎内嵌进单文件 | ✅ |
 | M7 | 端口成为持久单位：备注与标签、分区筛选、站点识别 | ✅ |
+| M8 | Web 远程控制台：内嵌 axum + token 鉴权，手机端开关映射 | ✅ |
 
 详见 [plans/README.md](./plans/README.md)。

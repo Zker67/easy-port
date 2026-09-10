@@ -1,7 +1,8 @@
 # API 与接口说明
 
 > 本文件维护项目 API、schema、事件合同和跨模块接口。
-> 这里的「API」指前端与 Rust 侧之间的 Tauri command 合同，本项目无 HTTP 服务端。
+> 这里的「API」主要指前端与 Rust 侧之间的 Tauri command 合同。
+> Web 远程控制台另有一套内嵌 HTTP 接口，见文末「Web 控制台 HTTP 接口」。
 
 ## Tauri command 列表
 
@@ -27,7 +28,23 @@
 | `set_archived` | `id: string`, `archived: bool` | - | 归档/取消归档单条；活跃映射不允许归档 |
 | `archive_inactive` | - | `usize` | 归档所有已断开/失败的条目，返回归档条数 |
 | `purge_archived` | - | `usize` | 彻底删除所有已归档记录，返回删除条数 |
-| `tunnel_counts` | - | `TunnelCounts` | 活跃数与历史累计数 |
+| `tunnel_counts` | - | `TunnelCounts` | 活跃数与历史累计数。**不含 Web 控制台**——那个数字的语义是「我暴露了几个自己的服务」 |
+
+### Web 远程控制台（仅桌面端可调用）
+
+| command | 参数 | 返回 | 职责 |
+|---|---|---|---|
+| `web_console_status` | - | `WebConsoleView` | 配置与运行态；token 只回传「是否已设置」 |
+| `set_web_console_port` | `port: u16` | - | 改监听端口；运行中不允许改，与已有映射撞端口会被拒 |
+| `set_web_console_label` | `label?: string` | - | 改备注 |
+| `regenerate_web_token` | - | `string` | 生成新 token，**明文只在此刻返回一次**；同时作废所有会话 |
+| `set_web_auto_start` | `enabled: bool` | - | 开机是否自动开启。**默认关闭** |
+| `start_web_console` | - | `WebConsoleView` | 起 HTTP 服务并建立隧道 |
+| `restore_web_console` | - | `bool` | 启动时按 `auto_start` 决定是否自动开启，返回是否真的开了 |
+| `stop_web_console` | - | - | 停服 + 杀隧道 + 作废会话 |
+
+**Web 端调不到这些命令**：它走的是内嵌服务的 HTTP 接口，只能开关已有映射。
+控制台不能改自己的配置——否则攻破一次即可把 token 改成攻击者的，永久驻留。
 
 命令统一以 `Result<T, String>` 返回，错误值是已本地化的用户可读文本（源自 `TunnelError`）。
 
@@ -72,6 +89,21 @@ interface RestoreOutcome {
   ok: boolean;
   error: string | null;
 }
+
+interface WebConsoleView {
+  port: number;
+  label: string | null;
+  hasToken: boolean;      // 只回传是否已设置，绝不回传哈希
+  status: WebStatus;
+  publicUrl: string | null; // 仅运行时非空，不落盘
+  autoStart: boolean;
+}
+
+type WebStatus =
+  | { kind: "stopped" }
+  | { kind: "starting" }
+  | { kind: "running" }
+  | { kind: "failed"; message: string };
 
 interface EngineStatus {
   available: boolean;
@@ -153,7 +185,13 @@ Rust 侧使用 `serde(rename_all = "camelCase")`，`TunnelStatus` 用
       "site": { "title": "我的开发服务器", "icon": "data:image/png;base64,…" },
       "tags": ["前端", "常用"]
     }
-  ]
+  ],
+  "web": {                 // Web 控制台配置；缺这一段也能读（serde(default)）
+    "port": 17650,
+    "label": "家里的电脑",
+    "tokenHash": "$argon2id$v=19$...",  // 只存哈希，绝不存明文
+    "autoStart": false
+  }
 }
 ```
 
@@ -174,6 +212,28 @@ Rust 侧使用 `serde(rename_all = "camelCase")`，`TunnelStatus` 用
 2. 不变量 6 要求链接不留存于任何文件。
 
 因此**「自动重连」重建的是隧道，不是旧链接**——每次都会分配新链接。
+
+## Web 控制台 HTTP 接口
+
+内嵌服务只监听 `127.0.0.1`，对外暴露完全交给 cloudflared——
+绑 `0.0.0.0` 会让同局域网的任何人直接摸到控制台。
+
+| 方法 | 路径 | 鉴权 | 说明 |
+|---|---|---|---|
+| `POST` | `/api/login` | 否 | body `{token}`，成功下发 HttpOnly 会话 cookie |
+| `POST` | `/api/logout` | 是 | 作废当前会话 |
+| `GET` | `/api/tunnels` | 是 | 列出未归档映射（`WebTunnelView`） |
+| `POST` | `/api/tunnels/:id/start` | 是 | 开启**已有**映射 |
+| `POST` | `/api/tunnels/:id/stop` | 是 | 断开 |
+| `GET` | `/*` | 否 | 静态资源，来自 `include_dir!`，不做路径拼接 |
+
+**暴露面刻意收敛**：没有新建、删除、改配置的接口，更没有改控制台自身的接口。
+`WebTunnelView` 是显式转换而非直接序列化 `Tunnel`——这是一道闸，
+将来给 `Tunnel` 加敏感字段时不会因为忘记收敛而自动外泄（也因此不含 favicon）。
+
+安全措施清单（token / 会话 / 限速 / 响应头）见
+[plans/2026-09-10-web-console/02-security.md](../plans/2026-09-10-web-console/02-security.md)，
+回归测试在 `src-tauri/tests/web_console.rs`。
 
 ## 变更规则
 

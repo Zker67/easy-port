@@ -13,7 +13,11 @@ Easy Port 是一个 Tauri 2 桌面应用，把本机任意端口映射到一条�
 以下决策已定稿，偏离前必须先与用户确认：
 
 1. **穿透引擎抽象**：`cloudflared` 是当前唯一实现，但必须置于 provider 抽象层之后，为后续接入 frp / ngrok 预留位置，不允许把 cloudflared 特有逻辑散落到 UI 层。
-2. **不引入 Express**：进程管理属于 Rust 侧职责，不额外拉起 Node 进程。
+2. **不引入独立后端进程**：进程管理属于 Rust 侧职责，不额外拉起 Node 进程。
+   如需 HTTP 服务（如 Web 远程控制台），只能是 Rust 进程内的内嵌服务（axum），
+   且必须能随应用退出而关闭（不变量 5 的延伸）。
+   *2026-09-10 由「不引入 Express」改写：原文语境只覆盖「不拉 Node 进程」，
+   不覆盖进程内内嵌服务这种情况。*
 3. **不引入数据库**：持久化仅隧道配置与计数，使用本地 JSON 文件；不引入 SQLite / Drizzle。
 4. **cloudflared 内嵌进主程序**（2026-09-10 经用户明确要求，两次取代先前决策：先由「不打包」改为 sidecar，再改为内嵌）：
    通过 `include_bytes!`（cargo feature `embed-cloudflared`，默认开启）编进 `easy-port.exe`，
@@ -30,6 +34,7 @@ Easy Port 是一个 Tauri 2 桌面应用，把本机任意端口映射到一条�
 8. **自建标题栏**：窗口设 `decorations: false`，标题栏由 `components/titlebar.tsx` 绘制。改动它时必须同时保证：拖拽区域（`data-tauri-drag-region`）足够大、三个窗口控制按钮对应的 `core:window:allow-*` 权限齐全、最大化状态跟随 `onResized` 更新。缺权限时按钮会静默失效。
 9. **站点探测只走本机回环**：`tunnel/site.rs` 抓标题与图标时只请求 `http://127.0.0.1:<port>`，**不得改成请求公网隧道 URL**。走公网会把流量绕经 Cloudflare、暴露链接到额外的日志面，且目标不是网页时毫无意义。探测失败一律返回 `None`，不阻断建立隧道。
 10. **站点信息落盘但每次启动校验**（2026-09-10 经用户要求，取代原「site 不落盘」决策）：`site` 存入 `state.json` 使列表启动即有名字可认；启动后 `spawn_site_refresh` 重新探测，**不一致才覆盖**，**探测失败保留旧值**。不要因为 `publicUrl` 不落盘就把 `site` 一并当成运行态清掉——旧链接是死链（有害），旧标题只是过时（仍可辨认）。
+11. **Web 控制台暴露的是应用自己的控制面**，风险高于普通映射：拿到 URL 与 token 的人能在本机开关任意端口的公网映射。因此 —— token 必须是 CSPRNG 生成且只存 Argon2id 哈希、校验走常数时间、限速必须有不依赖请求头的全局兜底（`CF-Connecting-IP` 可伪造）、失败响应不区分原因、Web 端只能开关**已有**映射且**不能改控制台自身配置**。完整清单见 `plans/2026-09-10-web-console/02-security.md`，**删改其中任何一条前先读那份文档**。
 
 ## 技术栈
 

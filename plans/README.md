@@ -59,6 +59,11 @@ plans/
 | ├ [02-embed-engine](./2026-09-10-shell-and-bundling/02-embed-engine.md) | cloudflared 内嵌进主程序 | `[done]` |
 | ├ [03-site-persistence](./2026-09-10-shell-and-bundling/03-site-persistence.md) | 站点信息落盘 + 启动校验 | `[done]` |
 | └ [04-labels-and-tags](./2026-09-10-shell-and-bundling/04-labels-and-tags.md) | 端口成为持久单位：备注 + 标签筛选 | `[done]` |
+| [2026-09-10-web-console](./2026-09-10-web-console/00-overview.md) | 总览：Web 远程控制台 | `[done]` |
+| ├ [01-server](./2026-09-10-web-console/01-server.md) | 内嵌 HTTP 服务与特别端口 | `[done]` |
+| ├ [02-security](./2026-09-10-web-console/02-security.md) | token / 会话 / 限速 / 暴露面收敛 | `[done]` |
+| ├ [03-web-ui](./2026-09-10-web-console/03-web-ui.md) | Web 端界面与构建产物 | `[done]` |
+| └ [04-desktop-tab](./2026-09-10-web-console/04-desktop-tab.md) | 桌面端 Web tab 交互 | `[done]` |
 
 M1–M3（工程初始化、单条隧道、多隧道并发与计数）在建立本目录前完成，
 其稳定事实直接记录于 [docs/architecture/project-structure.md](../docs/architecture/project-structure.md)，无对应计划文档。

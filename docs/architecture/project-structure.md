@@ -49,7 +49,7 @@
 
 ## 应用源码层
 
-M1–M5 实际落地结构：
+M1–M8 实际落地结构：
 
 ```text
 src/                            # React 前端
@@ -58,10 +58,11 @@ src/                            # React 前端
 ├── index.css                   # Tailwind 4 主题（蓝色主色 + 隧道状态色）
 ├── components/
 │   ├── titlebar.tsx            # 自建标题栏（decorations:false，含拖拽与窗口控制）
-│   ├── sidebar.tsx             # 侧栏导航：映射 / 历史 / 设置，可收起为图标态、可拖拽
+│   ├── sidebar.tsx             # 侧栏导航：映射 / 历史 / Web / 设置，可收起为图标态、可拖拽
 │   ├── pages/
 │   │   ├── mappings-page.tsx   # 工作台：收藏 / 已开启 / 已关闭分区 + 筛选搜索 + 创建表单
 │   │   ├── history-page.tsx    # 档案：全部记录（含运行中），可恢复 / 删除
+│   │   ├── web-page.tsx        # Web 远程控制台：风险提示 + token + 端口配置 + 开关
 │   │   └── settings-page.tsx   # 开机自启 + cloudflared 状态（随包 or 系统）
 │   ├── engine-guard.tsx        # cloudflared 缺失时的安装引导
 │   ├── create-tunnel-form.tsx  # 端口输入与创建
@@ -74,25 +75,41 @@ src/                            # React 前端
 │   ├── use-tunnels.ts          # TanStack Query 封装 + 启动时自动重连
 │   └── use-autostart.ts        # 系统开机自启（官方 autostart 插件）
 └── lib/
+    ├── tunnel-types.ts         # 桌面端与 Web 端共享的类型定义
     ├── tunnel-api.ts           # IPC 类型与调用，对齐 Rust 侧
     ├── ui-store.ts             # 纯客户端 UI 偏好（侧栏收起态），zustand + localStorage
     └── utils.ts                # cn()
+
+src-web/                        # Web 远程控制台前端，独立打包为 dist-web/
+├── index.html                  # 独立入口，不复用桌面端的 index.html
+├── main.tsx                    # 挂载，无 router
+├── App.tsx                     # 登录页 + 映射列表两个态
+├── api.ts                      # fetch 封装，走 cookie 会话
+└── styles.css                  # 手写约 100 行：oklch + 深浅色 + 44px 触控目标
 
 src-tauri/
 ├── build.rs                    # 校验 binaries/ 下的 cloudflared 并把路径喂给 include_bytes!
 ├── src/
 │   ├── main.rs                 # 二进制入口
 │   ├── lib.rs                  # Builder 接线 + 引擎释放 + 状态注入 + 退出兜底清理
-│   ├── commands.rs             # 19 个 Tauri command，见 docs/api.md
+│   ├── commands.rs             # 19 个隧道 command（Web 侧另有 8 个），见 docs/api.md
 │   ├── store.rs                # state.json 原子读写（M4）
-│   └── tunnel/
-│       ├── provider.rs         # 引擎无关类型与错误（不变量 1）
-│       ├── cloudflared.rs      # 内嵌释放 / spawn / 抓 stderr 取链接 / kill
-│       ├── site.rs             # 本机站点探测：标题与 favicon（不变量 9、10）
-│       └── registry.rs         # 注册表、计数、进程监视与落盘
+│   ├── tunnel/
+│   │   ├── provider.rs         # 引擎无关类型与错误（不变量 1）
+│   │   ├── cloudflared.rs      # 内嵌释放 / spawn / 抓 stderr 取链接 / kill
+│   │   ├── site.rs             # 本机站点探测：标题与 favicon（不变量 9、10）
+│   │   └── registry.rs         # 注册表、计数、进程监视与落盘
+│   └── web/                    # Web 远程控制台（不变量 11）
+│       ├── mod.rs              # 隧道监视与统一关闭路径
+│       ├── auth.rs             # token 生成 / Argon2id 哈希 / 会话 / 两级限速
+│       ├── console.rs          # 控制台状态与持久化（只存哈希）
+│       ├── server.rs           # axum 路由、鉴权中间件、暴露面收敛
+│       ├── assets.rs           # include_dir 静态资源（结构上杜绝路径穿越）
+│       └── commands.rs         # 8 个 Tauri command，仅桌面端可调用
 └── tests/
     ├── tunnel_e2e.rs           # 真实公网连通性集成测试（需外网）
-    └── registry_lifecycle.rs   # 崩溃感知与持久化往返（不需外网）
+    ├── registry_lifecycle.rs   # 崩溃感知与持久化往返（不需外网）
+    └── web_console.rs          # Web 控制台鉴权回归（不需外网）
 
 scripts/
 ├── fetch-cloudflared.mjs       # 取穿透引擎二进制到 src-tauri/binaries/（构建前必跑）
@@ -141,6 +158,16 @@ scripts/
   站点标题与图标**落盘**（旧的只是过时，仍能认出是哪个服务）。
   启动时先用落盘值填上，再由 `spawn_site_refresh` 重新探测；不一致才覆盖，
   探测失败保留旧值。改这里前先读不变量 10，别把两者当成同一类数据。
+- **Web 控制台在注册表之外**：`WebConsole` 不是 `TunnelRegistry` 里的一条隧道——
+  它是应用自己的控制面，不该出现在映射页、不计入活跃数量、不被「归档全部」波及。
+  放进注册表会让每个消费者都长出「除非是那条特殊的」分支。
+  但它的配置**要跟着 `state.json` 一起落盘**，所以 `Inner` 持有一份 `web` 快照，
+  否则任何一次隧道变动的 `snapshot()` 都会把控制台配置抹掉（已有回归测试守着）。
+- **Web 端暴露面是显式收敛的**：`WebTunnelView` 是从 `Tunnel` 显式转换而非直接序列化，
+  将来给 `Tunnel` 加敏感字段时不会自动外泄（也因此不含 favicon——上百 KB 的 data URI
+  不值得让手机端过公网拉）。接口只有「列出 + 开 + 关」，没有新建、删除、改配置。
+- **明文 token 只存在一瞬**：生成时返回给界面显示一次，落盘的只有 Argon2id 哈希。
+  `set_token_hash` 同时 `revoke_all()`——换了 token 却让旧会话继续用，换 token 就没意义了。
 - **引擎解析**：`cloudflared.rs` 用 `OnceLock<Option<PathBuf>>` 存释放出的路径，
   `lib.rs` 在 setup 阶段调 `extract_embedded` 并 `set_sidecar` 写入；未设或释放失败时
   `program()` 退回字符串 `"cloudflared"` 交给系统 PATH 解析（不变量 4 的回退路径）。
