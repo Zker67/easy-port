@@ -1,6 +1,7 @@
 mod commands;
 pub mod store;
 pub mod tunnel;
+pub mod web;
 
 use std::sync::Arc;
 
@@ -70,8 +71,14 @@ pub fn run() {
             };
 
             let (registry, startup_warning) = TunnelRegistry::with_store(store);
+            // 控制台的配置与隧道配置同在一个 state.json，从 registry 读回
+            let console = {
+                let persisted = registry.web_snapshot_blocking();
+                Arc::new(web::console::WebConsole::from_persisted(&persisted))
+            };
             app.manage(AppState {
                 registry: Arc::new(registry),
+                console,
                 startup_warning,
             });
             Ok(())
@@ -96,6 +103,14 @@ pub fn run() {
             commands::archive_inactive,
             commands::purge_archived,
             commands::tunnel_counts,
+            web::commands::web_console_status,
+            web::commands::set_web_console_port,
+            web::commands::set_web_console_label,
+            web::commands::regenerate_web_token,
+            web::commands::set_web_auto_start,
+            web::commands::start_web_console,
+            web::commands::restore_web_console,
+            web::commands::stop_web_console,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
@@ -105,7 +120,13 @@ pub fn run() {
         if let RunEvent::Exit = event {
             let state = handle.state::<AppState>();
             let registry = Arc::clone(&state.registry);
-            tauri::async_runtime::block_on(registry.shutdown_all());
+            let console = Arc::clone(&state.console);
+            tauri::async_runtime::block_on(async move {
+                registry.shutdown_all().await;
+                // 控制台的隧道不在 registry 里，必须单独收——
+                // 漏掉这一句会在退出后留下孤儿 cloudflared 进程
+                web::shutdown_console(&console).await;
+            });
         }
     });
 }

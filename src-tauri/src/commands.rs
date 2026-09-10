@@ -19,6 +19,9 @@ pub type CmdResult<T> = Result<T, String>;
 /// 注入到 Tauri 的共享状态。registry 需要 `Arc` 以便监视任务持有弱引用之外的所有权。
 pub struct AppState {
     pub registry: Arc<TunnelRegistry>,
+    /// Web 远程控制台。独立于 registry：它暴露的是应用自己的控制面，
+    /// 不是用户的服务，混进 registry 会让每个消费方都长出例外分支。
+    pub console: crate::web::console::SharedConsole,
     /// 启动时读取配置产生的告警，供前端首次渲染时提示一次。
     pub startup_warning: Option<String>,
 }
@@ -56,7 +59,11 @@ fn is_port_listening(port: u16) -> bool {
 /// 建立隧道的共用路径：校验 → spawn → 登记。
 ///
 /// `existing_id` 为 `Some` 时复用既有条目（自动重连场景），避免同端口出现两行记录。
-async fn establish(
+///
+/// `pub(crate)`：Web 控制台的「开启已有映射」走同一条路径。
+/// 刻意不给 Web 端另写一份——两条建立路径迟早会漂移，
+/// 而漏掉的很可能正是 `is_port_listening` 这类校验。
+pub(crate) async fn establish(
     registry: &Arc<TunnelRegistry>,
     port: u16,
     label: Option<String>,

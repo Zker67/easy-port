@@ -63,6 +63,9 @@ pub struct PersistedState {
     pub total_created: u64,
     #[serde(default)]
     pub tunnels: Vec<PersistedTunnel>,
+    /// Web 控制台的配置。`serde(default)` 保证旧文件缺这一段也能读。
+    #[serde(default)]
+    pub web: crate::web::console::PersistedWebConsole,
 }
 
 impl Default for PersistedState {
@@ -71,6 +74,7 @@ impl Default for PersistedState {
             version: STATE_VERSION,
             total_created: 0,
             tunnels: Vec::new(),
+            web: Default::default(),
         }
     }
 }
@@ -202,6 +206,7 @@ mod tests {
         let state = PersistedState {
             version: STATE_VERSION,
             total_created: 7,
+            web: Default::default(),
             tunnels: vec![
                 PersistedTunnel {
                     port: 3000,
@@ -296,7 +301,8 @@ mod tests {
             .save(&PersistedState {
                 version: STATE_VERSION,
                 total_created: 1,
-                tunnels: vec![PersistedTunnel {
+                web: Default::default(),
+            tunnels: vec![PersistedTunnel {
                     port: 3000,
                     label: Some("dev".into()),
                     auto_start: true,

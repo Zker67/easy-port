@@ -31,7 +31,7 @@ tauri-plugin-clipboard-manager = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # 异步读取 cloudflared 的 stderr 输出（隧道链接由 stderr 打印）
-tokio = { version = "1", features = ["process", "io-util", "rt", "macros", "sync", "time"] }
+tokio = { version = "1", features = ["process", "io-util", "rt", "macros", "sync", "time", "net"] }
 # 从 cloudflared 输出中提取 trycloudflare.com 链接
 regex = "1"
 thiserror = "2"
@@ -40,6 +40,10 @@ chrono = { version = "0.4", features = ["serde"] }
 # 探测本机服务的网页标题与 favicon（只请求 127.0.0.1，不走公网）
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 base64 = "0.22"
+axum = { version = "0.8.9", default-features = false, features = ["http1", "json", "tokio"] }
+argon2 = { version = "0.6.0", features = ["getrandom"] }
+include_dir = "0.7.4"
+getrandom = "0.4.3"
 
 # 按 pid 终止子进程：监视任务持锁 wait 时无法走 Child::kill，退回系统调用
 [target.'cfg(unix)'.dependencies]
@@ -49,6 +53,7 @@ libc = "0.2"
 tauri-plugin-autostart = "2"
 
 [dev-dependencies]
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
 
 

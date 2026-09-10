@@ -59,6 +59,9 @@ struct Entry {
 struct Inner {
     entries: HashMap<String, Entry>,
     total_created: u64,
+    /// Web 控制台的落盘配置。registry 不管理它，只是在重写整个 state.json 时
+    /// 原样带上，避免把别人的那一段抹掉。由上层通过 `set_web_snapshot` 更新。
+    web: crate::web::console::PersistedWebConsole,
 }
 
 impl Inner {
@@ -89,6 +92,9 @@ impl Inner {
             version: 1,
             total_created: self.total_created,
             tunnels: tunnels.into_iter().map(|(_, t)| t).collect(),
+            // registry 不拥有这一段，但 save 会重写整个文件——
+            // 必须原样带上，否则每次隧道变动都会把 Web 控制台的配置抹掉。
+            web: self.web.clone(),
         }
     }
 }
@@ -144,6 +150,7 @@ impl TunnelRegistry {
             inner: Mutex::new(Inner {
                 entries,
                 total_created: state.total_created,
+                web: state.web.clone(),
             }),
             store,
         };
@@ -186,6 +193,44 @@ impl TunnelRegistry {
             .values()
             .find(|e| e.tunnel.port == port)
             .map(|e| e.tunnel.id.clone())
+    }
+
+    /// 更新随快照一起落盘的 Web 控制台配置，并立即写盘。
+    ///
+    /// 存在的原因：`save` 重写整个 state.json，两段配置必须由同一个写入者持有，
+    /// 否则后写的一方会覆盖先写的一方。
+    pub async fn set_web_snapshot(&self, web: crate::web::console::PersistedWebConsole) {
+        {
+            let mut inner = self.inner.lock().await;
+            inner.web = web;
+        }
+        self.persist().await;
+    }
+
+    /// 读回落盘的 Web 控制台配置，供启动时恢复。
+    pub async fn web_snapshot(&self) -> crate::web::console::PersistedWebConsole {
+        self.inner.lock().await.web.clone()
+    }
+
+    /// 同步版本，仅供 Tauri 的 setup 钩子使用。
+    ///
+    /// setup 不是 async，而此刻 registry 刚构造、没有任何并发访问者，
+    /// `try_lock` 必然成功。拿不到锁说明调用时机错了，用默认值兜底而不是 panic。
+    pub fn web_snapshot_blocking(&self) -> crate::web::console::PersistedWebConsole {
+        self.inner
+            .try_lock()
+            .map(|inner| inner.web.clone())
+            .unwrap_or_default()
+    }
+
+    /// 按 id 取端口与备注。供 Web 控制台「开启已有映射」使用：
+    /// 它只允许操作**已存在**的条目，不能凭端口号凭空新建。
+    pub async fn find_port_by_id(&self, id: &str) -> Option<(u16, Option<String>)> {
+        let inner = self.inner.lock().await;
+        inner
+            .entries
+            .get(id)
+            .map(|e| (e.tunnel.port, e.tunnel.label.clone()))
     }
 
     /// 登记一条已成功建立的隧道，并启动进程监视任务。
@@ -753,8 +798,10 @@ async fn kill(process: &Process) {
 }
 
 /// 按 pid 终止进程。监视任务的 `wait()` 会随之返回并回收僵尸进程。
+///
+/// `pub(crate)`：Web 控制台的隧道不进 registry，但终止方式必须一致。
 #[cfg(windows)]
-async fn kill_pid(pid: u32) {
+pub(crate) async fn kill_pid(pid: u32) {
     use std::process::Stdio;
     // /T 连同子进程一并终止，避免 cloudflared 派生的进程残留。
     let _ = tokio::process::Command::new("taskkill")
@@ -767,7 +814,7 @@ async fn kill_pid(pid: u32) {
 }
 
 #[cfg(unix)]
-async fn kill_pid(pid: u32) {
+pub(crate) async fn kill_pid(pid: u32) {
     // SAFETY: kill(2) 对已退出的 pid 只会返回 ESRCH，不会有内存安全影响。
     unsafe {
         libc::kill(pid as libc::pid_t, libc::SIGKILL);
@@ -803,7 +850,8 @@ mod tests {
             .save(&PersistedState {
                 version: 1,
                 total_created: 12,
-                tunnels: vec![PersistedTunnel {
+                web: Default::default(),
+            tunnels: vec![PersistedTunnel {
                     port: 3000,
                     label: Some("dev".into()),
                     auto_start: true,
@@ -839,6 +887,49 @@ mod tests {
         let targets = registry.auto_start_targets().await;
         assert_eq!(targets.len(), 1);
         assert_eq!(targets[0].1, 3000);
+
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[tokio::test]
+    async fn 隧道变动不会抹掉_web_控制台配置() {
+        let dir = std::env::temp_dir().join(format!("easy-port-reg-webcfg-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        let registry = Arc::new(TunnelRegistry::with_store(StateStore::in_dir(&dir)).0);
+
+        // 先存一份控制台配置
+        registry
+            .set_web_snapshot(crate::web::console::PersistedWebConsole {
+                port: Some(18888),
+                label: Some("远程".into()),
+                token_hash: Some("$argon2id$v=19$x".into()),
+                auto_start: false,
+            })
+            .await;
+
+        // 再触发一次隧道侧的落盘。save 会重写整个文件，
+        // 如果 snapshot 不带上 web 段，这里就会把它抹掉。
+        {
+            let mut inner = registry.inner.lock().await;
+            let t = tunnel(3000, "2026-01-01T00:00:00Z");
+            inner.entries.insert(
+                t.id.clone(),
+                Entry {
+                    tunnel: t,
+                    process: None,
+                    auto_start: false,
+                    expiry_task: None,
+                },
+            );
+        }
+        registry.persist().await;
+
+        let (restored, _) = TunnelRegistry::with_store(StateStore::in_dir(&dir));
+        let web = restored.web_snapshot().await;
+        assert_eq!(web.port, Some(18888), "控制台端口不该被隧道落盘冲掉");
+        assert_eq!(web.label.as_deref(), Some("远程"));
+        assert!(web.token_hash.is_some(), "token 哈希不该丢");
 
         std::fs::remove_dir_all(&dir).ok();
     }
