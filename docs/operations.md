@@ -44,9 +44,15 @@ npm run tauri dev
 ```bash
 npm run build          # tsc 类型检查 + vite 构建
 npm run lint           # oxlint
-cargo check            # 在 src-tauri/ 下执行
 npm run tauri build    # 构建桌面产物
+
+# 在 src-tauri/ 下执行
+cargo check
+cargo test                                   # 单元测试
+cargo test --test tunnel_e2e -- --nocapture  # 真实公网连通性测试
 ```
+
+`tunnel_e2e` 会对真实 cloudflared 建立一条隧道并从公网回访本机，需要外网连通与本机 `node`；条件不满足时自动跳过而非失败。
 
 ## 部署
 

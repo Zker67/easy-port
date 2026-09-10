@@ -49,25 +49,41 @@
 
 ## 应用源码层
 
-> 以下为**规划结构**，M1 工程初始化后按实际落地情况回写。
+M1 实际落地结构：
 
 ```text
-src/                      # React 前端
-├── components/           # UI 组件（含 shadcn/ui 生成物）
-├── stores/               # Zustand 客户端状态
-├── hooks/                # TanStack Query 封装，与 Rust 侧 IPC 交互
-└── lib/                  # 纯函数工具
+src/                            # React 前端
+├── App.tsx                     # 主界面：引擎守卫 / 表单 / 列表 / 计数
+├── main.tsx                    # 入口，挂载 QueryClient 与 Toaster
+├── index.css                   # Tailwind 4 主题（含隧道状态色）
+├── components/
+│   ├── engine-guard.tsx        # cloudflared 缺失时的安装引导
+│   ├── create-tunnel-form.tsx  # 端口输入与创建
+│   ├── tunnel-card.tsx         # 单条隧道展示与操作
+│   └── ui/                     # shadcn 组件源码
+├── hooks/
+│   └── use-tunnels.ts          # TanStack Query 封装
+└── lib/
+    ├── tunnel-api.ts           # IPC 类型与调用，对齐 Rust 侧
+    └── utils.ts                # cn()
 
 src-tauri/
-└── src/
-    ├── main.rs           # 应用入口
-    ├── commands.rs       # 暴露给前端的 Tauri command
-    ├── tunnel/           # 隧道领域逻辑
-    │   ├── provider.rs   # provider 抽象 trait（不变量 1）
-    │   ├── cloudflared.rs# cloudflared 实现：spawn / 解析链接 / kill
-    │   └── registry.rs   # 活跃隧道注册表与计数
-    └── storage.rs        # JSON 持久化
+├── src/
+│   ├── main.rs                 # 二进制入口
+│   ├── lib.rs                  # Builder 接线 + 退出兜底清理
+│   ├── commands.rs             # 6 个 Tauri command
+│   └── tunnel/
+│       ├── provider.rs         # 引擎无关类型与错误（不变量 1）
+│       ├── cloudflared.rs      # spawn / 抓 stderr 取链接 / kill
+│       └── registry.rs         # 活跃隧道注册表与计数
+└── tests/
+    └── tunnel_e2e.rs           # 真实公网连通性集成测试
+
+scripts/
+└── fetch-shadcn.mjs            # 从 registry 取 shadcn 组件源码
 ```
+
+> 持久化（`storage.rs`）属 M4，尚未实现；当前隧道列表仅存于内存，重启即清空。
 
 ### 关键边界
 
