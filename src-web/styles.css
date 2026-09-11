@@ -33,6 +33,39 @@
   box-sizing: border-box;
 }
 
+/* 自建滚动条，与桌面端保持一致的观感。
+ *
+ * 与桌面端的区别：这里跑在用户自己的手机 / 电脑浏览器上，内核不确定，
+ * 所以标准属性与 WebKit 伪元素**都写**——前者覆盖 Firefox，
+ * 后者覆盖 Chrome / Safari。桌面端只有 WebView2 一种内核，不需要这样兜。
+ *
+ * 移动端浏览器基本是覆盖式滚动条（不占布局、滑动时才出现），
+ * 这两段主要在桌面浏览器访问控制台时生效。 */
+html {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--muted) 40%, transparent) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: color-mix(in oklab, var(--muted) 35%, transparent);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--muted) 60%, transparent);
+}
+
 body {
   margin: 0;
   background: var(--bg);

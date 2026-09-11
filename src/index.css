@@ -121,4 +121,46 @@
     -moz-appearance: textfield;
     appearance: textfield;
   }
+
+  /* 自建滚动条（不变量 7 的延伸）。
+     WebView2 的原生滚动条是浅色系统样式，深色主题下会在内容区右侧
+     留一条刺眼的灰白带，且宽度与圆角都不受主题控制。
+
+     只覆写 WebKit 伪元素：Tauri 在 Windows 上跑 WebView2（Chromium 内核），
+     这套选择器就是生效的那套。不用 `scrollbar-width` / `scrollbar-color`
+     标准属性——它们只能调粗细和两个颜色，做不出「悬停才变明显」的效果，
+     而且两套同时写会在 Firefox 内核下互相打架。 */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  /* 轨道透明：滚动条浮在内容上，不额外占一条视觉通道 */
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    /* 用 currentColor 混出的中性灰：深浅色主题各自取自己的前景色，
+       不必写两套硬编码颜色 */
+    background-color: color-mix(in oklab, var(--muted-foreground) 35%, transparent);
+    border-radius: 9999px;
+    /* 透明边框 + background-clip 让滑块看起来比轨道细，
+       两侧留白，不贴着内容边缘 */
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklab, var(--muted-foreground) 60%, transparent);
+  }
+
+  ::-webkit-scrollbar-thumb:active {
+    background-color: color-mix(in oklab, var(--muted-foreground) 75%, transparent);
+  }
+
+  /* 两条滚动条交汇的方角，默认会是一块白色补丁 */
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
 }
