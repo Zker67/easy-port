@@ -239,6 +239,12 @@ pub async fn spawn(port: u16) -> Result<SpawnedTunnel, TunnelError> {
             }
         })?;
 
+    // 立刻绑进 Job Object：应用被强杀时 RunEvent::Exit 不触发、Drop 不运行，
+    // 只有内核层面的作业对象能兜住，否则 cloudflared 会变成孤儿继续挂着隧道。
+    if let Some(pid) = child.id() {
+        super::job::assign(pid);
+    }
+
     // 链接在 stderr；同时读 stdout 防止管道写满导致子进程阻塞。
     let stderr = child.stderr.take().ok_or_else(|| {
         TunnelError::SpawnFailed("无法捕获 cloudflared 输出".into())

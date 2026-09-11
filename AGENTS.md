@@ -26,6 +26,12 @@ Easy Port 是一个 Tauri 2 桌面应用，把本机任意端口映射到一条�
    **回退路径不可删**：开发期（`tauri dev`）与关掉 feature 的构建都必须能用 PATH 上的 cloudflared。
    二进制不入库（见 `.gitignore`），构建前用 `node scripts/fetch-cloudflared.mjs` 获取。
 5. **进程不可泄漏**：任何创建子进程的路径都必须有对应的清理路径，包括应用崩溃与强制退出场景。
+   正常退出走 `RunEvent::Exit` → `shutdown_all()` + `web::shutdown_console()`；
+   **强杀（任务管理器、`taskkill /F`、崩溃）不会触发任何 Rust 代码**——
+   `RunEvent::Exit` 不发、`Drop` 不跑、`kill_on_drop` 随之失效。
+   Windows 下靠 `tunnel/job.rs` 的 Job Object（`KILL_ON_JOB_CLOSE`）由内核兜底，
+   所有子进程必须经 `cloudflared::spawn` 加入该作业对象。
+   回归测试 `tests/job_object.rs` 会真的强杀一个辅助进程来验证，**别删**。
 6. **链接即敏感信息**：Quick Tunnel 链接是公开可访问的，日志、错误信息、截图和文档中不得留存真实隧道 URL。
 7. **不使用原生控件**：步长切换器（`<input type="number">` 的原生箭头）、下拉菜单（`<select>`）、悬停提示（`title` 属性）与**滚动条**一律用自建样式或组件——`ui/number-field.tsx`、`ui/select.tsx` 与 `ui/tooltip.tsx`。原生控件由浏览器绘制，不受主题 token 控制、深浅色下观感不一致、命中区域过小，与桌面应用的一致性要求冲突。
    **`title` 属性不得再出现在 `src/` 的任何 JSX 里**，统一用 `<Hint label="…">` 包裹。

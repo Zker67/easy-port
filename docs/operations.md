@@ -108,7 +108,12 @@ cargo test --lib                                    # 单元测试
 cargo test --test registry_lifecycle -- --nocapture # 进程生命周期与持久化
 cargo test --test tunnel_e2e -- --nocapture         # 真实公网连通性测试
 cargo test --test web_console -- --nocapture        # Web 控制台鉴权回归（不需外网）
+cargo build --examples && cargo test --test job_object  # 强杀后子进程不残留（Windows）
 ```
+
+`job_object` 需要先 `cargo build --examples`：它靠 `examples/job_orphan_probe.rs`
+起一个真实进程再从外部强杀，单跑 `--test job_object` 不会自动构建 example，
+缺了会跳过而非失败（跳过时 stderr 有提示）。
 
 `registry_lifecycle` 用一个长睡的 `node` 子进程代替 cloudflared，验证崩溃感知、
 主动停止不误报、配置跨重启保留与链接不落盘，**不需要外网**。
@@ -198,7 +203,7 @@ npm run build && grep -c 'data-state=open' dist/assets/index-*.css
 | 首次启动比平时慢几秒 | 正在把 53 MB 的内嵌引擎释放到 `engine/`，只发生一次；之后按体积比对跳过 |
 | 映射卡片不显示网页名字和图标 | 目标端口不是网页、2 秒内没响应、或页面没有 `<title>`。探测失败不影响隧道本身 |
 | 隧道创建后拿不到链接 | cloudflared 的链接输出在 stderr 而非 stdout，确认两路输出都被捕获 |
-| 应用退出后隧道仍存活 | 子进程清理路径失效，检查退出钩子与崩溃兜底；手动排查残留 `cloudflared` 进程 |
+| 应用退出后隧道仍存活 | 正常退出看 `RunEvent::Exit` 钩子；**强制结束**看 Job Object 是否生效（`tunnel/job.rs`，启动时若创建失败会在 stderr 打日志）。排查残留：`Get-Process cloudflared` |
 | 链接可打开但页面报错 | 确认本机目标端口确有服务在监听，且监听地址不是仅 `127.0.0.1` 之外的受限接口 |
 | 标题栏按钮点了没反应 | `capabilities/default.json` 缺 `core:window:allow-*` 权限。缺权限时命令被拦截且不报错，需补齐后重新构建 |
 | 窗口拖不动 | 标题栏的 `data-tauri-drag-region` 被子元素覆盖，或该区域宽度不足 |

@@ -49,6 +49,14 @@ getrandom = "0.4.3"
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
+# Job Object：把子进程绑到作业对象上，应用被强杀时由系统连带终止（不变量 5 的兜底）
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+] }
+
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-autostart = "2"
 

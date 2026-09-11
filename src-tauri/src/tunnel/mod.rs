@@ -4,6 +4,7 @@
 //! `registry` 持有进程句柄并提供计数。上层只依赖 `provider` 与 `registry`。
 
 pub mod cloudflared;
+pub mod job;
 pub mod provider;
 pub mod registry;
 pub mod site;

@@ -98,6 +98,7 @@ src-tauri/
 │   ├── tunnel/
 │   │   ├── provider.rs         # 引擎无关类型与错误（不变量 1）
 │   │   ├── cloudflared.rs      # 内嵌释放 / spawn / 抓 stderr 取链接 / kill
+│   │   ├── job.rs              # Windows Job Object：强杀应用时由内核连带清理子进程
 │   │   ├── site.rs             # 本机站点探测：标题与 favicon（不变量 9、10）
 │   │   └── registry.rs         # 注册表、计数、进程监视与落盘
 │   └── web/                    # Web 远程控制台（不变量 11）
@@ -110,6 +111,7 @@ src-tauri/
 └── tests/
     ├── tunnel_e2e.rs           # 真实公网连通性集成测试（需外网）
     ├── registry_lifecycle.rs   # 崩溃感知与持久化往返（不需外网）
+    ├── job_object.rs           # 强杀父进程后子进程不残留（Windows）
     └── web_console.rs          # Web 控制台鉴权回归（不需外网）
 
 scripts/
@@ -121,7 +123,10 @@ scripts/
 
 - **provider 抽象**：`tunnel/provider.rs` 定义引擎无关的 trait，UI 层与 `commands.rs` 只依赖该抽象，不得直接引用 `cloudflared.rs` 的具体类型。
 - **计数唯一来源**：活跃映射数量由 `tunnel/registry.rs` 持有，前端只读展示，不在 UI 层维护第二份计数。
-- **进程清理**：所有 spawn 必经 `registry`，保证退出时可遍历清理（不变量 5）。
+- **进程清理有两层**：正常退出由 `RunEvent::Exit` 遍历 `registry` 清理；
+  强杀时没有任何 Rust 代码能执行，改由 Windows Job Object 在内核层兜底
+  （`tunnel/job.rs`，`spawn` 时立即绑定）。只有第一层时，用户用任务管理器
+  结束应用会留下仍在公网挂着隧道的孤儿进程——这是实测出来的缺陷。
 - **持久化只存意图**：`store.rs` 只落盘端口、备注、自动重连开关与累计计数；
   `publicUrl` / `status` / `id` 一律不落盘。Quick Tunnel 链接随进程退出即失效，
   缓存下来只是死链，同时不变量 6 要求链接不留存。**「自动重连」重建隧道并拿新链接，不是恢复旧链接。**
