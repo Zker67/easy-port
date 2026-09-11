@@ -71,8 +71,11 @@ export function TagEditor({
         <span
           key={tag}
           className={cn(
-            "inline-flex items-center gap-0.5 rounded border border-dashed border-border",
-            "bg-transparent px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground",
+            // 实心药丸：与备注那行的纯文本拉开形状差异。
+            // 标签是「一类东西」，视觉上就该是可数、成组、边界清晰的色块。
+            "group/tag inline-flex items-center gap-0.5 rounded-full",
+            "bg-primary/10 py-0.5 pl-2 pr-1 text-[11px] leading-none font-medium",
+            "text-primary/90 transition-colors hover:bg-primary/15",
           )}
         >
           {tag}
@@ -83,9 +86,11 @@ export function TagEditor({
               disabled={setTags.isPending}
               aria-label={`移除标签 ${tag}`}
               className={cn(
-                "-mr-0.5 rounded-sm p-0.5 outline-none transition-colors",
-                "hover:bg-destructive/15 hover:text-destructive",
-                "focus-visible:ring-1 focus-visible:ring-ring",
+                // × 平时半隐，悬停整枚标签才显形，避免一排标签全是删除号
+                "rounded-full p-0.5 opacity-40 outline-none transition-all",
+                "group-hover/tag:opacity-100",
+                "hover:bg-destructive/20 hover:text-destructive",
+                "focus-visible:opacity-100 focus-visible:ring-1 focus-visible:ring-ring",
               )}
             >
               <X className="size-2.5" />
@@ -118,7 +123,7 @@ export function TagEditor({
             placeholder="标签名"
             aria-label="新标签名称"
             className={cn(
-              "selectable h-5 w-20 rounded border border-ring bg-background px-1",
+              "selectable h-[22px] w-24 rounded-full border border-ring bg-background px-2",
               "text-[11px] outline-none",
             )}
           />
@@ -147,11 +152,12 @@ export function TagEditor({
               }}
               aria-label="添加标签"
               className={cn(
-                "inline-flex items-center gap-0.5 rounded px-1.5 py-0.5 text-[11px]",
-                // 同备注入口：虚线边框保证可发现，不能只靠淡色
+                "inline-flex items-center gap-0.5 rounded-full py-0.5 pl-1.5 pr-2 text-[11px]",
+                // 虚线勾出「这里还能再放一枚」的空位，形状与实心标签一致，
+                // 只是没有填充——不能只靠淡色，那样在深色主题下几乎看不见
                 "border border-dashed border-border text-muted-foreground",
                 "transition-colors outline-none",
-                "hover:border-solid hover:border-primary/50 hover:bg-accent hover:text-foreground",
+                "hover:border-solid hover:border-primary/40 hover:bg-primary/10 hover:text-primary",
                 "focus-visible:ring-2 focus-visible:ring-ring focus-visible:text-foreground",
               )}
             >

@@ -253,7 +253,7 @@ export function TunnelCard({
                 {tunnel.tags.map((tag) => (
                   <span
                     key={tag}
-                    className="rounded border border-dashed border-border px-1.5 py-0.5 text-[11px] leading-none text-muted-foreground"
+                    className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] leading-none font-medium text-primary/90"
                   >
                     {tag}
                   </span>
