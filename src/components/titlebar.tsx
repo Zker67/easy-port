@@ -3,6 +3,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Cable, Minimize2, Minus, Square, X } from "lucide-react";
 
 import { Hint } from "@/components/ui/tooltip";
+import { useAppVersion } from "@/hooks/use-app-version";
 import { cn } from "@/lib/utils";
 
 const appWindow = getCurrentWindow();
@@ -18,6 +19,7 @@ const appWindow = getCurrentWindow();
  */
 export function Titlebar({ children }: { children?: React.ReactNode }) {
   const [maximized, setMaximized] = useState(false);
+  const version = useAppVersion();
 
   useEffect(() => {
     let disposed = false;
@@ -51,6 +53,13 @@ export function Titlebar({ children }: { children?: React.ReactNode }) {
       >
         <Cable className="size-4 text-primary" />
         Easy Port
+        {/* 版本标签：弱化处理，不与应用名争视觉重量。
+            取不到版本时整块不渲染，不留一个空壳。 */}
+        {version && (
+          <span className="rounded bg-muted px-1.5 py-px font-mono text-[10px] font-normal leading-normal text-muted-foreground">
+            v{version}
+          </span>
+        )}
       </div>
 
       {/* 中间留给计数等状态，同样可拖拽 */}
