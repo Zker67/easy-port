@@ -58,12 +58,13 @@ src/                            # React 前端
 ├── index.css                   # Tailwind 4 主题（蓝色主色 + 隧道状态色）
 ├── components/
 │   ├── titlebar.tsx            # 自建标题栏（decorations:false，含拖拽与窗口控制）
-│   ├── sidebar.tsx             # 侧栏导航：映射 / 历史 / Web / 设置，可收起为图标态、可拖拽
+│   ├── sidebar.tsx             # 侧栏导航：映射 / 历史 / Web / 引擎 / 设置，可收起为图标态、可拖拽
 │   ├── pages/
 │   │   ├── mappings-page.tsx   # 工作台：收藏 / 已开启 / 已关闭分区 + 筛选搜索 + 创建表单
 │   │   ├── history-page.tsx    # 档案：全部记录（含运行中），可恢复 / 删除
 │   │   ├── web-page.tsx        # Web 远程控制台：风险提示 + token + 端口配置 + 开关
-│   │   └── settings-page.tsx   # 开机自启 + cloudflared 状态（随包 or 系统）
+│   │   ├── engine-page.tsx     # 穿透引擎：来源判定、内嵌体积、工作模式与安装引导
+│   │   └── settings-page.tsx   # 开机自启等应用级选项（引擎信息已移出）
 │   ├── engine-guard.tsx        # cloudflared 缺失时的安装引导
 │   ├── create-tunnel-form.tsx  # 端口输入与创建
 │   ├── port-badge.tsx          # 端口号专用渲染（纯数字，无 localhost: 与 : 前缀）
@@ -168,6 +169,9 @@ scripts/
   不值得让手机端过公网拉）。接口只有「列出 + 开 + 关」，没有新建、删除、改配置。
 - **明文 token 只存在一瞬**：生成时返回给界面显示一次，落盘的只有 Argon2id 哈希。
   `set_token_hash` 同时 `revoke_all()`——换了 token 却让旧会话继续用，换 token 就没意义了。
+- **引擎页与设置页都在引擎守卫之前**：`App.tsx` 的 `renderPage` 里这两页先于
+  `EngineGuard` 返回。引擎页承载安装命令与「重新检测」，把它挡在守卫后面等于
+  「要先有引擎才能去装引擎」。改动路由顺序时别把这两个分支挪到守卫下面。
 - **引擎解析**：`cloudflared.rs` 用 `OnceLock<Option<PathBuf>>` 存释放出的路径，
   `lib.rs` 在 setup 阶段调 `extract_embedded` 并 `set_sidecar` 写入；未设或释放失败时
   `program()` 退回字符串 `"cloudflared"` 交给系统 PATH 解析（不变量 4 的回退路径）。

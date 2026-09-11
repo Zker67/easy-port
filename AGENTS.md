@@ -27,10 +27,12 @@ Easy Port 是一个 Tauri 2 桌面应用，把本机任意端口映射到一条�
    二进制不入库（见 `.gitignore`），构建前用 `node scripts/fetch-cloudflared.mjs` 获取。
 5. **进程不可泄漏**：任何创建子进程的路径都必须有对应的清理路径，包括应用崩溃与强制退出场景。
 6. **链接即敏感信息**：Quick Tunnel 链接是公开可访问的，日志、错误信息、截图和文档中不得留存真实隧道 URL。
-7. **不使用原生控件**：步长切换器（`<input type="number">` 的原生箭头）、下拉菜单（`<select>`）与悬停提示（`title` 属性）一律用自建组件——`ui/number-field.tsx`、`ui/select.tsx` 与 `ui/tooltip.tsx`。原生控件由浏览器绘制，不受主题 token 控制、深浅色下观感不一致、命中区域过小，与桌面应用的一致性要求冲突。
+7. **不使用原生控件**：步长切换器（`<input type="number">` 的原生箭头）、下拉菜单（`<select>`）、悬停提示（`title` 属性）与**滚动条**一律用自建样式或组件——`ui/number-field.tsx`、`ui/select.tsx` 与 `ui/tooltip.tsx`。原生控件由浏览器绘制，不受主题 token 控制、深浅色下观感不一致、命中区域过小，与桌面应用的一致性要求冲突。
    **`title` 属性不得再出现在 `src/` 的任何 JSX 里**，统一用 `<Hint label="…">` 包裹。
    `Hint` 不替代 `aria-label`：tooltip 只在悬停/聚焦时出现，朗读器与触屏用户依赖的仍是 `aria-label`，两者都要写。
    包 `disabled` 的按钮时需外套一层 `<span>`——disabled 元素收不到指针事件，否则「为什么点不了」这条最该解释的提示反而不显示。
+   滚动条在 `index.css` 的 `@layer base` 里用 `::-webkit-scrollbar-*` 覆写（WebView2 是 Chromium 内核）；
+   `src-web/` 因为跑在用户自己的浏览器里，内核不确定，标准属性与 WebKit 伪元素都要写。
 8. **自建标题栏**：窗口设 `decorations: false`，标题栏由 `components/titlebar.tsx` 绘制。改动它时必须同时保证：拖拽区域（`data-tauri-drag-region`）足够大、三个窗口控制按钮对应的 `core:window:allow-*` 权限齐全、最大化状态跟随 `onResized` 更新。缺权限时按钮会静默失效。
 9. **站点探测只走本机回环**：`tunnel/site.rs` 抓标题与图标时只请求 `http://127.0.0.1:<port>`，**不得改成请求公网隧道 URL**。走公网会把流量绕经 Cloudflare、暴露链接到额外的日志面，且目标不是网页时毫无意义。探测失败一律返回 `None`，不阻断建立隧道。
 10. **站点信息落盘但每次启动校验**（2026-09-10 经用户要求，取代原「site 不落盘」决策）：`site` 存入 `state.json` 使列表启动即有名字可认；启动后 `spawn_site_refresh` 重新探测，**不一致才覆盖**，**探测失败保留旧值**。不要因为 `publicUrl` 不落盘就把 `site` 一并当成运行态清掉——旧链接是死链（有害），旧标题只是过时（仍可辨认）。

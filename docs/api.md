@@ -108,11 +108,27 @@ type WebStatus =
 interface EngineStatus {
   available: boolean;
   version: string | null;
-  engine: string;      // 恒为 "cloudflared"
-  path: string | null; // 可执行文件位置，供设置页展示
-  bundled: boolean;    // true = 用的是内嵌释放出的副本；false = 回退到系统 PATH
+  engine: string;              // 恒为 "cloudflared"
+  path: string | null;         // 可执行文件位置，供引擎页展示
+  bundled: boolean;            // 本次运行是否用的是内嵌释放出的副本
+  embedded: boolean;           // 这个构建里有没有编进 cloudflared（编译期事实）
+  embeddedSize: number | null; // 内嵌副本字节数，未内嵌为 null
 }
 ```
+
+#### `bundled` 与 `embedded` 不能混为一谈
+
+`bundled === false` 有两种成因，对用户的含义完全不同：
+
+| `embedded` | `bundled` | 处境 | 该怎么办 |
+|---|---|---|---|
+| `true` | `true` | 一体版，正常 | 单文件自足成立，什么都不用做 |
+| `true` | `false` | 一体版但**释放失败**，已回退 PATH | 这是故障：查 app data 是否可写、是否被安全软件拦 |
+| `false` | `false` | 轻量版构建（关了 `embed-cloudflared`） | 本来就该自行安装，不是故障 |
+
+只有一个 `bundled` 布尔值时，后两行在界面上是同一句话。引擎页靠 `embedded` 才能
+把「你需要装一下」和「本该自带却没成」分开讲。回归测试见
+`cloudflared.rs::内嵌与本次是否用上是两回事`。
 
 ### 备注（`label`）与标签（`tags`）是两种东西
 
