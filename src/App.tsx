@@ -16,6 +16,7 @@ import {
   useEngineStatus,
   useRestoreOnLaunch,
   useTunnelCounts,
+  useTunnelMetrics,
   useTunnels,
 } from "@/hooks/use-tunnels";
 
@@ -26,6 +27,7 @@ export default function App() {
   const tunnels = useTunnels();
   const counts = useTunnelCounts();
   const autoStartFlags = useAutoStartFlags();
+  const metrics = useTunnelMetrics();
 
   // 引擎确认可用后才重建，否则每条都会以「未找到 cloudflared」失败。
   useRestoreOnLaunch(engine.data?.available === true);
@@ -83,7 +85,13 @@ export default function App() {
       return <WebPage />;
     }
 
-    return <MappingsPage tunnels={items} autoStartFlags={flags} />;
+    return (
+      <MappingsPage
+        tunnels={items}
+        autoStartFlags={flags}
+        metrics={metrics.data ?? {}}
+      />
+    );
   }
 
   return (

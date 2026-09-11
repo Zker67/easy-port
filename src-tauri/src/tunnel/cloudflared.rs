@@ -27,6 +27,10 @@ pub const URL_TIMEOUT_SECS: u64 = 30;
 
 const URL_TIMEOUT: Duration = Duration::from_secs(URL_TIMEOUT_SECS);
 
+/// 拿到链接后再等指标端口的时间。实测两者相隔不到 1 秒，
+/// 给 3 秒余量；等不到就放弃，不让附加功能拖慢主流程。
+const METRICS_PORT_TIMEOUT: Duration = Duration::from_secs(3);
+
 /// Windows: 不为子进程创建控制台窗口。
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
@@ -213,6 +217,8 @@ pub async fn check_engine() -> EngineStatus {
 pub struct SpawnedTunnel {
     pub child: Child,
     pub public_url: String,
+    /// 本地指标端口，解析失败时为 None（不影响隧道可用性）。
+    pub metrics_port: Option<u16>,
 }
 
 /// 为指定本机端口拉起一条 Quick Tunnel，等待并返回公网链接。
@@ -226,6 +232,10 @@ pub async fn spawn(port: u16) -> Result<SpawnedTunnel, TunnelError> {
             &format!("http://localhost:{port}"),
             // 关掉自动更新，避免运行期间进程被替换
             "--no-autoupdate",
+            // 指标端口交给系统分配：默认只在 20241~20245 里挑，撑不住 5 条以上映射。
+            // 实际端口由 cloudflared 打印在 stderr，下面顺带解析出来。
+            "--metrics",
+            "127.0.0.1:0",
         ])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -251,16 +261,39 @@ pub async fn spawn(port: u16) -> Result<SpawnedTunnel, TunnelError> {
     })?;
     let stdout = child.stdout.take();
 
+    // 两样东西都在 stderr 上，且**链接先于指标端口出现**（实测：链接在第 5 行，
+    // "Starting metrics server" 在第 20 行）。所以不能取到链接就退出，
+    // 也不能为了等端口而让建立隧道变慢——两者分成两条通道各送各的：
+    // 链接一到就放行，端口后到再补。
     let (tx, mut rx) = mpsc::channel::<String>(1);
+    let (port_tx, port_rx) = tokio::sync::oneshot::channel::<u16>();
 
     tokio::spawn(async move {
         let mut lines = BufReader::new(stderr).lines();
+        let mut url_sent = false;
+        let mut port_tx = Some(port_tx);
+
         while let Ok(Some(line)) = lines.next_line().await {
-            if let Some(m) = url_regex().find(&line) {
-                let _ = tx.send(m.as_str().to_string()).await;
-                break;
+            if !url_sent {
+                if let Some(m) = url_regex().find(&line) {
+                    let _ = tx.send(m.as_str().to_string()).await;
+                    url_sent = true;
+                    continue;
+                }
+            }
+            if let Some(p) = super::metrics::parse_metrics_port(&line) {
+                if let Some(sender) = port_tx.take() {
+                    let _ = sender.send(p);
+                }
+                // 两样都拿到就没必要继续读了；但 stderr 仍需被消费，
+                // 否则管道写满会把 cloudflared 卡死——所以只是停止解析，不退出循环
+                if url_sent {
+                    break;
+                }
             }
         }
+        // 继续把剩余输出读掉，防止管道写满阻塞子进程
+        while let Ok(Some(_)) = lines.next_line().await {}
     });
 
     if let Some(out) = stdout {
@@ -271,7 +304,17 @@ pub async fn spawn(port: u16) -> Result<SpawnedTunnel, TunnelError> {
     }
 
     match timeout(URL_TIMEOUT, rx.recv()).await {
-        Ok(Some(public_url)) => Ok(SpawnedTunnel { child, public_url }),
+        Ok(Some(public_url)) => {
+            // 端口在链接之后才打印，这里短暂再等一下。
+            // 等不到也照常返回：指标只是附加信息，不该拖慢或阻断建立隧道。
+            let metrics_port =
+                timeout(METRICS_PORT_TIMEOUT, port_rx).await.ok().and_then(|r| r.ok());
+            Ok(SpawnedTunnel {
+                child,
+                public_url,
+                metrics_port,
+            })
+        }
         // 通道关闭或超时：两种情况都必须回收子进程
         Ok(None) => {
             let _ = child.kill().await;

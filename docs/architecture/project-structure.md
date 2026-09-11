@@ -93,12 +93,13 @@ src-tauri/
 ├── src/
 │   ├── main.rs                 # 二进制入口
 │   ├── lib.rs                  # Builder 接线 + 引擎释放 + 状态注入 + 退出兜底清理
-│   ├── commands.rs             # 19 个隧道 command（Web 侧另有 8 个），见 docs/api.md
+│   ├── commands.rs             # 20 个隧道 command（Web 侧另有 8 个），见 docs/api.md
 │   ├── store.rs                # state.json 原子读写（M4）
 │   ├── tunnel/
 │   │   ├── provider.rs         # 引擎无关类型与错误（不变量 1）
 │   │   ├── cloudflared.rs      # 内嵌释放 / spawn / 抓 stderr 取链接 / kill
 │   │   ├── job.rs              # Windows Job Object：强杀应用时由内核连带清理子进程
+│   │   ├── metrics.rs          # 读 cloudflared 指标端口，得到访问计数
 │   │   ├── site.rs             # 本机站点探测：标题与 favicon（不变量 9、10）
 │   │   └── registry.rs         # 注册表、计数、进程监视与落盘
 │   └── web/                    # Web 远程控制台（不变量 11）

@@ -10,6 +10,7 @@ const KEYS = {
   counts: ["counts"] as const,
   autoStart: ["auto-start"] as const,
   allTags: ["all-tags"] as const,
+  metrics: ["metrics"] as const,
 };
 
 /** cloudflared 可用性只需查一次，除非用户手动重试 */
@@ -34,6 +35,20 @@ export function useTunnelCounts() {
   return useQuery({
     queryKey: KEYS.counts,
     queryFn: tunnelApi.counts,
+    refetchInterval: 3000,
+  });
+}
+
+/**
+ * 各条映射的访问统计。
+ *
+ * 单独一个 query 而不是并进 list：抓取要向每条隧道的指标端口发 HTTP 请求，
+ * 失败或变慢时不该拖累列表本身的刷新。
+ */
+export function useTunnelMetrics() {
+  return useQuery({
+    queryKey: KEYS.metrics,
+    queryFn: tunnelApi.metrics,
     refetchInterval: 3000,
   });
 }

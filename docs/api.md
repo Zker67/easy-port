@@ -28,6 +28,7 @@
 | `set_archived` | `id: string`, `archived: bool` | - | 归档/取消归档单条；活跃映射不允许归档 |
 | `archive_inactive` | - | `usize` | 归档所有已断开/失败的条目，返回归档条数 |
 | `purge_archived` | - | `usize` | 彻底删除所有已归档记录，返回删除条数 |
+| `tunnel_metrics` | - | `Record<string, TunnelMetrics>` | 各活跃映射的访问统计，键为隧道 id。抓不到的条目缺席而非报错 |
 | `tunnel_counts` | - | `TunnelCounts` | 活跃数与历史累计数。**不含 Web 控制台**——那个数字的语义是「我暴露了几个自己的服务」 |
 
 ### Web 远程控制台（仅桌面端可调用）
@@ -105,6 +106,17 @@ type WebStatus =
   | { kind: "running" }
   | { kind: "failed"; message: string };
 
+/**
+ * 访问统计。值是 cloudflared **进程内累计**，隧道一重连就归零——
+ * 语义是「本次连接以来」，不是该端口的历史总访问量。
+ */
+interface TunnelMetrics {
+  totalRequests: number;
+  requestErrors: number;
+  concurrentRequests: number;
+  connections: number;  // 到 CF 边缘的连接数，0 表示此刻其实是断的
+}
+
 interface EngineStatus {
   available: boolean;
   version: string | null;
@@ -129,6 +141,17 @@ interface EngineStatus {
 只有一个 `bundled` 布尔值时，后两行在界面上是同一句话。引擎页靠 `embedded` 才能
 把「你需要装一下」和「本该自带却没成」分开讲。回归测试见
 `cloudflared.rs::内嵌与本次是否用上是两回事`。
+
+#### 为什么没有「请求延迟」
+
+`cloudflared_proxy_connect_latency` 统计的是 TCP/WebSocket 代理连接，
+普通 HTTP 请求不计入，**实测恒为 0**。唯一有值的延迟是 cloudflared 注册到
+边缘的耗时，只在建立连接时记一次，对「这条映射用得多不多」没有意义。
+因此刻意不采集，免得界面上显示一个看着像真的的 0ms。
+
+指标端口用 `--metrics 127.0.0.1:0` 让系统分配：cloudflared 默认只在
+20241~20245 里挑，撑不住 5 条以上映射。实际端口由它打印在 stderr 上，
+与公网链接同一路输出，解析时顺带取出（`metrics::parse_metrics_port`）。
 
 ### 备注（`label`）与标签（`tags`）是两种东西
 

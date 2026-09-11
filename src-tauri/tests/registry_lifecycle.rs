@@ -70,7 +70,7 @@ async fn 进程意外退出会被标记为失败态() {
     let (registry, _) = TunnelRegistry::with_store(StateStore::in_dir(&dir));
     let registry = Arc::new(registry);
 
-    let inserted = registry.insert(tunnel(19001), child, None).await;
+    let inserted = registry.insert(tunnel(19001), child, None, None).await;
     assert!(matches!(inserted.status, TunnelStatus::Running));
 
     // 从外部杀掉进程，模拟 cloudflared 自行崩溃。
@@ -114,7 +114,7 @@ async fn 主动停止不会被误报为崩溃() {
     let (registry, _) = TunnelRegistry::with_store(StateStore::in_dir(&dir));
     let registry = Arc::new(registry);
 
-    let inserted = registry.insert(tunnel(19002), child, None).await;
+    let inserted = registry.insert(tunnel(19002), child, None, None).await;
     registry.stop(&inserted.id).await.unwrap();
 
     // 给监视任务足够时间；它若误判会把状态改成 Failed。
@@ -143,7 +143,7 @@ async fn 配置与计数跨重启保留且链接不落盘() {
     let (registry, _) = TunnelRegistry::with_store(StateStore::in_dir(&dir));
     let registry = Arc::new(registry);
 
-    let inserted = registry.insert(tunnel(19003), child, None).await;
+    let inserted = registry.insert(tunnel(19003), child, None, None).await;
     registry.set_auto_start(&inserted.id, true).await.unwrap();
     registry.shutdown_all().await;
 
@@ -186,7 +186,7 @@ async fn 定时关闭到点后断开且不误报为崩溃() {
     let (registry, _) = TunnelRegistry::with_store(StateStore::in_dir(&dir));
     let registry = Arc::new(registry);
 
-    let inserted = registry.insert(tunnel(19007), child, None).await;
+    let inserted = registry.insert(tunnel(19007), child, None, None).await;
 
     // 用秒级接口设 1 秒，真实等待定时任务触发——而不是手动调 stop 模拟。
     let deadline = registry
@@ -234,7 +234,7 @@ async fn 取消定时会清掉到期时刻() {
     let (registry, _) = TunnelRegistry::with_store(StateStore::in_dir(&dir));
     let registry = Arc::new(registry);
 
-    let inserted = registry.insert(tunnel(19008), child, None).await;
+    let inserted = registry.insert(tunnel(19008), child, None, None).await;
     registry.set_expiry(&inserted.id, Some(10)).await.unwrap();
     assert!(registry.list().await[0].expires_at.is_some());
 
@@ -264,7 +264,7 @@ async fn 非活跃隧道不能设定定时() {
     let (registry, _) = TunnelRegistry::with_store(StateStore::in_dir(&dir));
     let registry = Arc::new(registry);
 
-    let inserted = registry.insert(tunnel(19009), child, None).await;
+    let inserted = registry.insert(tunnel(19009), child, None, None).await;
     registry.stop(&inserted.id).await.unwrap();
 
     let result = registry.set_expiry(&inserted.id, Some(5)).await;
@@ -290,8 +290,8 @@ async fn 归档保留运行中的映射且不删除记录() {
     let (registry, _) = TunnelRegistry::with_store(StateStore::in_dir(&dir));
     let registry = Arc::new(registry);
 
-    let kept = registry.insert(tunnel(19005), running, None).await;
-    let stopped = registry.insert(tunnel(19006), to_stop, None).await;
+    let kept = registry.insert(tunnel(19005), running, None, None).await;
+    let stopped = registry.insert(tunnel(19006), to_stop, None, None).await;
     registry.stop(&stopped.id).await.unwrap();
 
     let archived = registry.archive_inactive().await;
@@ -321,7 +321,7 @@ async fn 活跃映射不能归档() {
     let (registry, _) = TunnelRegistry::with_store(StateStore::in_dir(&dir));
     let registry = Arc::new(registry);
 
-    let inserted = registry.insert(tunnel(19010), child, None).await;
+    let inserted = registry.insert(tunnel(19010), child, None, None).await;
 
     assert!(
         registry.set_archived(&inserted.id, true).await.is_err(),
@@ -344,7 +344,7 @@ async fn 归档状态跨重启保留且重连会取消归档() {
     let (registry, _) = TunnelRegistry::with_store(StateStore::in_dir(&dir));
     let registry = Arc::new(registry);
 
-    let inserted = registry.insert(tunnel(19011), child, None).await;
+    let inserted = registry.insert(tunnel(19011), child, None, None).await;
     registry.stop(&inserted.id).await.unwrap();
     registry.set_archived(&inserted.id, true).await.unwrap();
 
@@ -360,7 +360,7 @@ async fn 归档状态跨重启保留且重连会取消归档() {
         return;
     };
     let again = restored
-        .insert(tunnel(19011), child2, Some(list[0].id.clone()))
+        .insert(tunnel(19011), child2, Some(list[0].id.clone()), None)
         .await;
     assert!(!again.archived, "重新建立后应回到映射页（取消归档）");
 
@@ -379,7 +379,7 @@ async fn 移除的记录不再落盘() {
         eprintln!("跳过：本机没有可用的 node");
         return;
     };
-    let inserted = registry.insert(tunnel(19004), child, None).await;
+    let inserted = registry.insert(tunnel(19004), child, None, None).await;
     registry.remove(&inserted.id).await.unwrap();
 
     let (restored, _) = TunnelRegistry::with_store(StateStore::in_dir(&dir));

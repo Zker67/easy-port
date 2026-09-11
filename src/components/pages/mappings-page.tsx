@@ -11,7 +11,11 @@ import {
   useArchiveInactive,
   useCreateTunnel,
 } from "@/hooks/use-tunnels";
-import { isActive, type Tunnel } from "@/lib/tunnel-api";
+import {
+  isActive,
+  type Tunnel,
+  type TunnelMetrics,
+} from "@/lib/tunnel-api";
 import { cn } from "@/lib/utils";
 
 type Filter = "all" | "favorite" | "running" | "stopped";
@@ -32,9 +36,12 @@ const FILTERS: { id: Filter; label: string }[] = [
 export function MappingsPage({
   tunnels,
   autoStartFlags,
+  metrics,
 }: {
   tunnels: Tunnel[];
   autoStartFlags: Record<string, boolean>;
+  /** 各条映射的访问统计，键为隧道 id；抓不到的条目缺席 */
+  metrics: Record<string, TunnelMetrics>;
 }) {
   const create = useCreateTunnel();
   const archiveInactive = useArchiveInactive();
@@ -98,6 +105,7 @@ export function MappingsPage({
         key={t.id}
         tunnel={t}
         autoStart={autoStartFlags[t.id] ?? false}
+        metrics={metrics[t.id]}
         onReconnect={() =>
           create.mutate({ port: t.port, label: t.label ?? undefined })
         }

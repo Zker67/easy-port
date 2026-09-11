@@ -109,7 +109,12 @@ cargo test --test registry_lifecycle -- --nocapture # 进程生命周期与持�
 cargo test --test tunnel_e2e -- --nocapture         # 真实公网连通性测试
 cargo test --test web_console -- --nocapture        # Web 控制台鉴权回归（不需外网）
 cargo build --examples && cargo test --test job_object  # 强杀后子进程不残留（Windows）
+cargo test --test metrics_e2e -- --nocapture        # 访问计数（需外网 + 本机 3080 有服务）
 ```
+
+`metrics_e2e` 会建一条真隧道、等它在边缘生效、再打几个请求核对计数。
+条件不满足（无外网、3080 无服务、隧道 30 秒内未生效）时**跳过而非失败**——
+否则网络一抖就误报。
 
 `job_object` 需要先 `cargo build --examples`：它靠 `examples/job_orphan_probe.rs`
 起一个真实进程再从外部强杀，单跑 `--test job_object` 不会自动构建 example，

@@ -103,6 +103,7 @@ pub fn run() {
             commands::archive_inactive,
             commands::purge_archived,
             commands::tunnel_counts,
+            commands::tunnel_metrics,
             web::commands::web_console_status,
             web::commands::set_web_console_port,
             web::commands::set_web_console_label,

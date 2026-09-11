@@ -93,7 +93,9 @@ pub(crate) async fn establish(
         tags: Vec::new(),
     };
 
-    Ok(registry.insert(tunnel, spawned.child, existing_id).await)
+    Ok(registry
+        .insert(tunnel, spawned.child, existing_id, spawned.metrics_port)
+        .await)
 }
 
 /// 为指定本机端口创建一条公网映射。
@@ -273,6 +275,36 @@ pub async fn set_tags(
 #[tauri::command]
 pub async fn all_tags(state: State<'_, AppState>) -> CmdResult<Vec<String>> {
     Ok(state.registry.all_tags().await)
+}
+
+/// 各条活跃映射的访问统计，键为隧道 id。
+///
+/// 并发抓取而非逐条串行：条目多时串行会把轮询间隔拖爆。
+/// 抓不到的条目直接缺席，前端按「无数据」处理——
+/// 指标是附加信息，不该因为它失败就让整个列表报错。
+#[tauri::command]
+pub async fn tunnel_metrics(
+    state: State<'_, AppState>,
+) -> CmdResult<std::collections::HashMap<String, crate::tunnel::metrics::TunnelMetrics>> {
+    let ports = state.registry.metrics_ports().await;
+
+    // 用 tokio::spawn 起并发任务再逐个 await，避免为一个 join_all 引入 futures 依赖
+    let tasks: Vec<_> = ports
+        .into_iter()
+        .map(|(id, port)| {
+            tokio::spawn(async move {
+                crate::tunnel::metrics::fetch(port).await.map(|m| (id, m))
+            })
+        })
+        .collect();
+
+    let mut out = std::collections::HashMap::new();
+    for task in tasks {
+        if let Ok(Some((id, m))) = task.await {
+            out.insert(id, m);
+        }
+    }
+    Ok(out)
 }
 
 /// 设置收藏状态。收藏的映射在「映射」页置顶成独立分区。

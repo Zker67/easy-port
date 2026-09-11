@@ -33,6 +33,20 @@ export interface EngineStatus {
   embeddedSize: number | null;
 }
 
+/**
+ * 与 Rust 侧 tunnel::metrics::TunnelMetrics 对应。
+ *
+ * 这些值是 **cloudflared 进程内累计**，隧道一重连就归零，
+ * 因此语义是「本次连接以来」，不是该端口的历史总访问量。
+ */
+export interface TunnelMetrics {
+  totalRequests: number;
+  requestErrors: number;
+  concurrentRequests: number;
+  /** 到 Cloudflare 边缘的连接数，0 表示这条隧道此刻其实是断的 */
+  connections: number;
+}
+
 /** 与 Rust 侧 commands::RestoreOutcome 对应 */
 export interface RestoreOutcome {
   port: number;
@@ -99,6 +113,8 @@ export const tunnelApi = {
   purgeArchived: () => invoke<number>("purge_archived"),
 
   counts: () => invoke<TunnelCounts>("tunnel_counts"),
+
+  metrics: () => invoke<Record<string, TunnelMetrics>>("tunnel_metrics"),
 };
 
 /** 与 Rust 侧 web::console::WebStatus 对应 */

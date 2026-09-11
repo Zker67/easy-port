@@ -5,6 +5,7 @@
 
 pub mod cloudflared;
 pub mod job;
+pub mod metrics;
 pub mod provider;
 pub mod registry;
 pub mod site;

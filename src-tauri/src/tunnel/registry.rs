@@ -42,6 +42,9 @@ struct Process {
     pid: Option<u32>,
     /// 由 stop / remove / shutdown 在杀进程前置位，供监视任务区分退出原因。
     expected_exit: Arc<AtomicBool>,
+    /// cloudflared 的本地指标端口，用于查「这条映射被访问了多少次」。
+    /// 随进程存亡：进程没了端口也就没了，所以放在 Process 里而不是 Entry。
+    metrics_port: Option<u16>,
 }
 
 struct Entry {
@@ -233,6 +236,22 @@ impl TunnelRegistry {
             .map(|e| (e.tunnel.port, e.tunnel.label.clone()))
     }
 
+    /// 取所有活跃条目的指标端口。
+    ///
+    /// 只返回端口不返回指标本身：抓取要发 HTTP 请求，不能占着注册表的锁做——
+    /// 那会让整个列表在抓取期间卡住。调用方拿到端口后自行并发抓。
+    pub async fn metrics_ports(&self) -> Vec<(String, u16)> {
+        let inner = self.inner.lock().await;
+        inner
+            .entries
+            .iter()
+            .filter_map(|(id, e)| {
+                let port = e.process.as_ref()?.metrics_port?;
+                Some((id.clone(), port))
+            })
+            .collect()
+    }
+
     /// 登记一条已成功建立的隧道，并启动进程监视任务。
     ///
     /// `existing_id` 为 `Some` 时原地复用该条目（保留其 auto_start 与列表位置）。
@@ -241,6 +260,7 @@ impl TunnelRegistry {
         mut tunnel: Tunnel,
         child: Child,
         existing_id: Option<String>,
+        metrics_port: Option<u16>,
     ) -> Tunnel {
         // pid 必须在交出所有权前取出：之后监视任务会持锁 wait，取不到了。
         let pid = child.id();
@@ -255,6 +275,7 @@ impl TunnelRegistry {
                 child: Arc::clone(&child),
                 pid,
                 expected_exit: Arc::clone(&expected_exit),
+                metrics_port,
             });
 
             match existing_id.and_then(|id| inner.entries.remove(&id).map(|e| (id, e))) {

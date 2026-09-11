@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
+  Activity,
   Archive,
   Copy,
   ExternalLink,
@@ -39,7 +40,12 @@ import {
   useSetExpiry,
   useStopTunnel,
 } from "@/hooks/use-tunnels";
-import { isActive, type Tunnel, type TunnelStatus } from "@/lib/tunnel-api";
+import {
+  isActive,
+  type Tunnel,
+  type TunnelMetrics,
+  type TunnelStatus,
+} from "@/lib/tunnel-api";
 import { cn } from "@/lib/utils";
 
 /** 二次确认的等待窗口：超时后按钮复原，避免一直停在确认态 */
@@ -61,12 +67,15 @@ function statusMeta(status: TunnelStatus) {
 export function TunnelCard({
   tunnel,
   autoStart,
+  metrics,
   variant = "mapping",
   onReconnect,
   isReconnecting,
 }: {
   tunnel: Tunnel;
   autoStart: boolean;
+  /** 访问统计，抓不到时为 undefined（不影响卡片其余部分） */
+  metrics?: TunnelMetrics;
   /**
    * 卡片所在页面，决定露出哪些操作：
    * - `mapping`：完整操作（断开 / 定时 / 自动重建开关 / 归档）
@@ -204,6 +213,32 @@ export function TunnelCard({
             <span className="truncate text-xs text-muted-foreground">
               {meta.text}
             </span>
+
+            {/* 访问计数：只在运行中且真的有人访问过时出现。
+                0 次不显示——每张卡片挂一个「0」既占地方又没信息量。
+                数字来自 cloudflared 进程内计数，重连即归零，
+                因此 tooltip 里必须写明是「本次连接以来」，不能让人当成历史总量。 */}
+            {active && metrics && metrics.totalRequests > 0 && (
+              <Hint
+                label={
+                  `本次连接以来被访问 ${metrics.totalRequests} 次` +
+                  (metrics.requestErrors > 0
+                    ? `，其中 ${metrics.requestErrors} 次出错`
+                    : "") +
+                  "。重新连接后重新计数"
+                }
+              >
+                <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums">
+                  <Activity className="size-3" />
+                  {metrics.totalRequests}
+                  {metrics.requestErrors > 0 && (
+                    <span className="text-destructive">
+                      /{metrics.requestErrors}
+                    </span>
+                  )}
+                </span>
+              </Hint>
+            )}
           </div>
 
           {/* 第二行：公网链接。这是这张卡片的产出物，位置固定，
