@@ -22,6 +22,15 @@ export interface EngineStatus {
   path: string | null;
   /** true = 用的是内嵌释放出的副本；false = 回退到系统 PATH（不变量 4）*/
   bundled: boolean;
+  /**
+   * 这个构建里是否编进了 cloudflared（cargo feature `embed-cloudflared`）。
+   *
+   * 必须与 `bundled` 分开看：`bundled === false` 既可能是「轻量版，本来就没内嵌」，
+   * 也可能是「一体版但释放失败回退了」——对用户是两回事。
+   */
+  embedded: boolean;
+  /** 内嵌副本的字节数，未内嵌时为 null */
+  embeddedSize: number | null;
 }
 
 /** 与 Rust 侧 commands::RestoreOutcome 对应 */

@@ -4,6 +4,7 @@ import { Loader2, ShieldAlert } from "lucide-react";
 import { EngineGuard } from "@/components/engine-guard";
 import { HistoryPage } from "@/components/pages/history-page";
 import { MappingsPage } from "@/components/pages/mappings-page";
+import { EnginePage } from "@/components/pages/engine-page";
 import { SettingsPage } from "@/components/pages/settings-page";
 import { WebPage } from "@/components/pages/web-page";
 import { Sidebar, type Page } from "@/components/sidebar";
@@ -35,15 +36,21 @@ export default function App() {
   const activeCount = counts.data?.active ?? 0;
 
   function renderPage() {
-    if (page === "settings") {
-      // 设置页在引擎缺失时也必须可达——修复入口就在这里
+    // 引擎页与设置页在引擎缺失时也必须可达——
+    // 修复入口（安装命令、重新检测）就在引擎页上，
+    // 把它挡在引擎守卫后面等于「要先有引擎才能去装引擎」。
+    if (page === "engine") {
       return (
-        <SettingsPage
+        <EnginePage
           engine={engine.data}
           onRecheck={() => void engine.refetch()}
           isRechecking={engine.isFetching}
         />
       );
+    }
+
+    if (page === "settings") {
+      return <SettingsPage />;
     }
 
     if (engine.isPending) {

@@ -128,9 +128,19 @@ pub struct EngineStatus {
     pub version: Option<String>,
     /// 引擎名，当前恒为 "cloudflared"。
     pub engine: String,
-    /// 可执行文件所在路径，供设置页展示「从哪里找到的」。
+    /// 可执行文件所在路径，供引擎页展示「从哪里找到的」。
     pub path: Option<String>,
-    /// 是否随应用打包。见 AGENTS.md 不变量 4：恒为 false，
-    /// cloudflared 由用户自行安装，应用只做检测与引导。
+    /// 本次运行是否在用随包释放出来的那一份。
+    ///
+    /// 注意与 `embedded` 的区别：本字段为 false 只说明「这次没用上」，
+    /// 可能是构建时就没内嵌，也可能是内嵌了但释放失败回退到了 PATH。
+    /// 两者对用户的含义完全不同，必须靠 `embedded` 才能区分。
     pub bundled: bool,
+    /// 这个构建里到底有没有编进 cloudflared（cargo feature `embed-cloudflared`）。
+    ///
+    /// 有它才能说清「单文件自足」是否成立：
+    /// `embedded && bundled` 才是真正的免安装单文件形态。
+    pub embedded: bool,
+    /// 内嵌副本的字节数，没有内嵌时为 None。用于在界面上说明体积从何而来。
+    pub embedded_size: Option<u64>,
 }

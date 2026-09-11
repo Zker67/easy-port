@@ -4,6 +4,7 @@ import {
   MonitorSmartphone,
   PanelLeftClose,
   PanelLeftOpen,
+  Plug,
   Settings,
   Waypoints,
 } from "lucide-react";
@@ -17,7 +18,7 @@ import {
 } from "@/lib/ui-store";
 import { cn } from "@/lib/utils";
 
-export type Page = "mappings" | "history" | "web" | "settings";
+export type Page = "mappings" | "history" | "web" | "engine" | "settings";
 
 const ITEMS: {
   id: Page;
@@ -44,10 +45,16 @@ const ITEMS: {
     hint: "远程控制台：在手机等其他设备上查看与开关映射",
   },
   {
+    id: "engine",
+    label: "引擎",
+    icon: Plug,
+    hint: "穿透引擎 cloudflared：来源、版本与工作原理",
+  },
+  {
     id: "settings",
     label: "设置",
     icon: Settings,
-    hint: "开机自启与穿透引擎状态",
+    hint: "开机自启等应用级选项",
   },
 ];
 

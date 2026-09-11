@@ -114,6 +114,26 @@ pub fn is_bundled() -> bool {
     SIDECAR.get().and_then(|o| o.as_ref()).is_some()
 }
 
+/// 这个构建里是否编进了 cloudflared。
+///
+/// 与 `is_bundled()` 不同：这是**编译期事实**，与本次运行是否用上了它无关。
+/// 界面要靠它区分「轻量版，本来就得装」和「一体版但释放失败了」。
+pub fn is_embedded() -> bool {
+    cfg!(feature = "embed-cloudflared")
+}
+
+/// 内嵌副本的字节数；未内嵌时为 None。
+pub fn embedded_size() -> Option<u64> {
+    #[cfg(feature = "embed-cloudflared")]
+    {
+        Some(EMBEDDED.len() as u64)
+    }
+    #[cfg(not(feature = "embed-cloudflared"))]
+    {
+        None
+    }
+}
+
 fn base_command(program: &str) -> Command {
     #[allow(unused_mut)]
     let mut cmd = Command::new(program);
@@ -122,7 +142,7 @@ fn base_command(program: &str) -> Command {
     cmd
 }
 
-/// 定位 cloudflared 可执行文件，供设置页展示来源。
+/// 定位 cloudflared 可执行文件，供引擎页展示来源。
 ///
 /// 用了 sidecar 就直接返回其路径；否则用系统自带的 where / which 查 PATH，
 /// 避免自己解析 PATH 与扩展名规则。
@@ -173,6 +193,8 @@ pub async fn check_engine() -> EngineStatus {
                 engine: "cloudflared".into(),
                 path: locate_executable().await,
                 bundled: is_bundled(),
+                embedded: is_embedded(),
+                embedded_size: embedded_size(),
             }
         }
         _ => EngineStatus {
@@ -181,6 +203,8 @@ pub async fn check_engine() -> EngineStatus {
             engine: "cloudflared".into(),
             path: None,
             bundled: is_bundled(),
+            embedded: is_embedded(),
+            embedded_size: embedded_size(),
         },
     }
 }
@@ -283,6 +307,27 @@ mod tests {
         if SIDECAR.get().is_none() {
             assert_eq!(program(), "cloudflared", "未登记时必须回退到 PATH 上的命令");
             assert!(!is_bundled());
+        }
+    }
+
+    #[test]
+    fn 内嵌与本次是否用上是两回事() {
+        // 界面要靠这两个字段区分「轻量版本来就没内嵌」和「内嵌了但释放失败」，
+        // 它们必须各自独立：把 embedded 实现成 is_bundled() 的别名会让
+        // 回退场景与轻量版场景显示同一句话，而两者的处置方式完全不同。
+        assert_eq!(
+            is_embedded(),
+            cfg!(feature = "embed-cloudflared"),
+            "embedded 反映的是编译期事实，与运行期是否用上无关"
+        );
+        assert_eq!(
+            embedded_size().is_some(),
+            is_embedded(),
+            "内嵌了就该报得出体积，没内嵌就该是 None"
+        );
+        if let Some(n) = embedded_size() {
+            // cloudflared 实际约 53 MB；这里只挡「0 字节也算内嵌」这类明显错误
+            assert!(n > 1024 * 1024, "内嵌副本不该只有 {n} 字节");
         }
     }
 
